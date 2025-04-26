@@ -1,103 +1,108 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+
+interface Message {
+  role: 'gpt' | 'user'
+  content: string
+}
+
+function SessionContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const mode = searchParams.get('mode')
+
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'gpt', content: '今日の問い：あなたにしかできない仕事は何ですか？' }
+  ])
+  const [input, setInput] = useState('')
+
+  const summary = {
+    text: "今日のあなたの行動テーマは、“強みに集中すること”です。",
+    quote: "なすべきことをなせ。— P.F.ドラッカー",
+    book: "経営者の条件（ダイヤモンド社）"
+  }
+
+  const actions = [
+    "午前中を強みを活かす時間にブロックする",
+    "15分短縮できる会議をひとつ減らす",
+    "“やらないことリスト”を10分更新する"
+  ]
+
+  const handleSend = () => {
+    if (!input.trim()) return
+
+    setMessages(prev => [...prev, { role: 'user', content: input }])
+
+    setTimeout(() => {
+      setMessages(prev => [...prev, { role: 'gpt', content: '素晴らしい！それをさらに広げるには？' }])
+    }, 1000)
+
+    setInput('')
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="max-w-xl mx-auto p-4 flex flex-col min-h-screen">
+      <h1 className="text-xl font-bold mb-4">哲学モード: {mode}</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+      <div className="flex-1 space-y-4 overflow-y-auto mb-4">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`p-3 rounded-xl ${msg.role === 'gpt' ? 'bg-gray-100 text-left' : 'bg-blue-100 text-right'}`}>
+            {msg.content}
+          </div>
+        ))}
+
+        {messages.length >= 5 && (
+          <>
+            {/* まとめ */}
+            <div className="border-t pt-6 mt-6 space-y-4">
+              <div className="bg-yellow-50 p-4 rounded-xl">
+                <h2 className="font-bold text-lg mb-2">🔍 今日のまとめ</h2>
+                <p className="mb-2">{summary.text}</p>
+                <p className="italic text-gray-600 mb-2">📜 {summary.quote}</p>
+                <p className="text-blue-600">📚 {summary.book}</p>
+              </div>
+            </div>
+
+            {/* アクション選択 */}
+            <div className="border-t pt-6 mt-6 space-y-2">
+              <h2 className="font-bold text-lg mb-2">✅ 今日のアクションを選んでください</h2>
+              {actions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => router.push(`/dashboard?task=${encodeURIComponent(action)}`)}
+                  className="block w-full border rounded-xl p-3 text-left hover:bg-blue-100 transition"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          className="flex-1 border rounded-xl p-2"
+          placeholder="考えたことを書く..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSend() }}
+        />
+        <button className="bg-blue-500 text-white px-4 rounded-xl" onClick={handleSend}>
+          送信
+        </button>
+      </div>
+    </main>
+  )
+}
+
+export default function SessionPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SessionContent />
+    </Suspense>
+  )
 }

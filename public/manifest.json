@@ -1,0 +1,18 @@
+{
+    "name": "nbrcd",
+    "short_name": "nbrcd",
+    "description": "問いで構造に入り、行動に変える哲学OS",
+    "icons": [
+      {
+        "src": "/nbrcd_logo01.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ],
+    "start_url": "/",
+    "background_color": "#ffffff",
+    "display": "standalone",
+    "scope": "/",
+    "theme_color": "#3B82F6"
+  }
+
