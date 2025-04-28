@@ -267,7 +267,7 @@ export default function Page() {
               width={48}
               height={48}
             />
-            <div className="flex-1">
+            <div className="w-1/3"> {/* 幅を1/3に縮小 */}
               <label className="block mb-1">哲学を選択：</label>
               <select
                 value={selectedPhilosopherId}
@@ -287,7 +287,7 @@ export default function Page() {
       </div>
 
       {/* スクロールエリア：チャット部分 */}
-      <div className="flex-1 overflow-y-auto mt-32 mb-20 max-w-2xl mx-auto w-full px-6"> {/* mt-32 に調整（上部エリアの高さが減った分） */}
+      <div className="flex-1 overflow-y-auto mt-32 mb-20 max-w-2xl mx-auto w-full px-6">
         {error && <div className="text-red-500 mb-4">{error}</div>}
         {loading && <div className="text-gray-500 mb-4">処理中...</div>}
 
@@ -300,11 +300,11 @@ export default function Page() {
             .map((msg, idx) => (
               <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
                 {msg.role === "user" ? (
-                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-sm"> {/* フォントサイズを小さく */}
+                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-sm">
                     {msg.content}
                   </span>
                 ) : (
-                  <span className="text-black whitespace-pre-line"> {/* 改行を有効化 */}
+                  <span className="text-black whitespace-pre-line">
                     {msg.content}
                   </span>
                 )}
@@ -345,7 +345,7 @@ export default function Page() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="ここに答えや考えを書いてください..."
-              className="border p-2 flex-1 rounded text-sm" 
+              className="border p-2 flex-1 rounded text-sm"
               disabled={loading}
             />
             <button
