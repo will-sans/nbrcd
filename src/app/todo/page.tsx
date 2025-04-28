@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import { FaComments } from "react-icons/fa";
+import { FaComments, FaBars } from "react-icons/fa";
 
 interface Todo {
   id: number;
@@ -70,15 +70,24 @@ export default function TodoPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
       <button
-        onClick={() => router.push("/")} // /session から / に変更
+        onClick={() => router.push("/settings")}
+        className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
+        aria-label="Go to Settings"
+      >
+        <FaBars size={24} />
+      </button>
+
+      <button
+        onClick={() => router.push("/")}
         className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
-        aria-label="Go to Home" // aria-label を更新
+        aria-label="Go to Home"
       >
         <FaComments size={24} />
       </button>
 
-      <h1 className="text-2xl font-bold mb-2">ToDoリスト</h1>
-      <p className="mb-6">
+      {/* mt-10 を削除し、ホーム画面と同じ高さに調整 */}
+      <h1 className="text-2xl font-bold mb-2 text-center">カレンダー</h1>
+      <p className="mb-6 text-center">
         現在のポイント：<span className="font-bold">{points}</span>pt
       </p>
 
