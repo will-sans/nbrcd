@@ -1,8 +1,8 @@
-// types/actionLog.ts
+// src/types/actionLog.ts
 export interface ActionLog {
-    action: string;
-    timestamp: string;
-    sessionId: string;
-    philosopherId: string;
-    details?: any;
-  }
+  action: string;
+  timestamp: string;
+  sessionId: string;
+  philosopherId: string;
+  details?: Record<string, string>;
+}

@@ -20,8 +20,10 @@ export async function POST(req: NextRequest) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) { // Error を unknown に変更
     console.error("API Error:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    // error を安全に扱うために型ガードを使用
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
