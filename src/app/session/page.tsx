@@ -1,13 +1,103 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { philosophers } from "@/data/philosophers";
+import { parseGptSessionResult, ParsedSessionResult } from "@/lib/parseGptSessionResult";
+import { v4 as uuidv4 } from "uuid";
+import { ActionLog } from "@/types/actionLog";
+import { FaCalendarAlt } from "react-icons/fa";
 
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
 }
+
+interface Todo {
+  id: number;
+  text: string;
+  done: boolean;
+  date?: string;
+}
+
+const analyzeUsageData = async () => {
+  try {
+    const response = await fetch("/api/logs");
+    if (!response.ok) {
+      throw new Error(`Failed to fetch logs: ${response.status}`);
+    }
+    const logs: ActionLog[] = await response.json();
+    console.log("Fetched logs:", logs);
+
+    const sessions: { [key: string]: ActionLog[] } = {};
+    logs.forEach((log) => {
+      if (!sessions[log.sessionId]) {
+        sessions[log.sessionId] = [];
+      }
+      sessions[log.sessionId].push(log);
+    });
+
+    const sessionDurations: number[] = [];
+    Object.values(sessions).forEach((sessionLogs) => {
+      const startLog = sessionLogs.find((log) => log.action === "start_session");
+      const endLog = sessionLogs[sessionLogs.length - 1];
+
+      if (startLog && endLog) {
+        const startTime = new Date(startLog.timestamp).getTime();
+        const endTime = new Date(endLog.timestamp).getTime();
+        const duration = (endTime - startTime) / 1000;
+        sessionDurations.push(duration);
+      }
+    });
+
+    const averageDuration =
+      sessionDurations.length > 0
+        ? sessionDurations.reduce((sum, duration) => sum + duration, 0) / sessionDurations.length
+        : 0;
+
+    console.log("セッション数:", sessionDurations.length);
+    console.log("平均使用時間（秒）:", averageDuration.toFixed(2));
+    console.log("全セッションの使用時間（秒）:", sessionDurations);
+
+    return { sessionCount: sessionDurations.length, averageDuration };
+  } catch (error) {
+    console.error("Failed to fetch logs:", error);
+    return { sessionCount: 0, averageDuration: 0 };
+  }
+};
+
+interface UsageStatsProps {
+  messages: Message[];
+  parsedResult: ParsedSessionResult | null;
+}
+
+const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
+  const [stats, setStats] = useState<{ sessionCount: number; averageDuration: number }>({
+    sessionCount: 0,
+    averageDuration: 0,
+  });
+
+  const fetchStats = async () => {
+    const data = await analyzeUsageData();
+    setStats(data);
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, [messages, parsedResult]);
+
+  return (
+    <div className="mt-6 p-4 border rounded bg-gray-100">
+      <h2 className="text-xl font-bold mb-2">使用統計</h2>
+      <p>セッション数: {stats.sessionCount}</p>
+      <p>平均使用時間: {stats.averageDuration.toFixed(2)} 秒</p>
+    </div>
+  );
+};
 
 export default function SessionPage() {
   const router = useRouter();
@@ -18,13 +108,69 @@ export default function SessionPage() {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [systemMessage, setSystemMessage] = useState<Message | null>(null);
+  const [parsedResult, setParsedResult] = useState<ParsedSessionResult | null>(null);
+  const [sessionId] = useState<string>(uuidv4());
+  const chatContainer = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatContainer.current?.scrollTo({
+      top: chatContainer.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+
+  const saveLog = async (action: string, details?: any) => {
+    const log: ActionLog = {
+      action,
+      timestamp: new Date().toISOString(),
+      sessionId,
+      philosopherId: selectedPhilosopherId,
+      details,
+    };
+
+    try {
+      const response = await fetch("/api/logs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(log),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to save log");
+      }
+      console.log("Successfully saved log to server:", log);
+    } catch (error) {
+      console.error("Failed to save log:", error);
+    }
+  };
+
+  const splitMessageAndActionPlan = (reply: string) => {
+    const actionPlanMatch = reply.match(/アクションプラン: .*$/m);
+    let messageWithoutActionPlan = reply;
+    let actionPlan = "";
+
+    if (actionPlanMatch) {
+      actionPlan = actionPlanMatch[0];
+      messageWithoutActionPlan = reply.replace(/アクションプラン: .*$/m, "").trim();
+    }
+
+    return { messageWithoutActionPlan, actionPlan };
+  };
 
   const handleStartSession = async () => {
-    if (!input.trim()) return;
+    if (!input.trim()) {
+      setError("入力してください");
+      return;
+    }
+    if (input.trim().length < 3) {
+      setError("もう少し詳しく入力してください");
+      return;
+    }
 
     const selectedPhilosopher = philosophers.find((p) => p.id === selectedPhilosopherId);
     if (!selectedPhilosopher) {
-      setError("Philosopher not found");
+      setError("哲学者が見つかりません");
       return;
     }
 
@@ -44,6 +190,9 @@ export default function SessionPage() {
     setInput("");
     setLoading(true);
     setError(null);
+    setParsedResult(null);
+
+    await saveLog("start_session", { input: input.trim() });
 
     try {
       console.log("Sending messages:", updatedMessages);
@@ -61,7 +210,7 @@ export default function SessionPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch from API");
+        throw new Error(errorData.error || "APIからの取得に失敗しました");
       }
 
       const data = await response.json();
@@ -76,15 +225,22 @@ export default function SessionPage() {
       setMessages((prev) => [...prev, newAssistantMessage]);
       setSessionStarted(true);
     } catch (error: any) {
-      console.error(error);
-      setError(error.message || "An error occurred");
+      console.error("Error:", error);
+      setError(error.message || "エラーが発生しました");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSendDuringSession = async () => {
-    if (!input.trim()) return;
+    if (!input.trim()) {
+      setError("入力してください");
+      return;
+    }
+    if (input.trim().length < 3) {
+      setError("もう少し詳しく入力してください");
+      return;
+    }
 
     const newUserMessage: Message = {
       role: "user",
@@ -95,6 +251,8 @@ export default function SessionPage() {
     setInput("");
     setLoading(true);
     setError(null);
+
+    await saveLog("send_message", { input: input.trim() });
 
     try {
       console.log("Sending messages:", systemMessage ? [systemMessage, ...updatedMessages] : updatedMessages);
@@ -112,22 +270,30 @@ export default function SessionPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to fetch from API");
+        throw new Error(errorData.error || "APIからの取得に失敗しました");
       }
 
       const data = await response.json();
       const reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
+      const { messageWithoutActionPlan, actionPlan } = splitMessageAndActionPlan(reply);
+
       const newAssistantMessage: Message = {
         role: "assistant",
-        content: reply,
+        content: messageWithoutActionPlan,
       };
 
       setMessages((prev) => [...prev, newAssistantMessage]);
+
+      if (messages.filter((m) => m.role === "user").length >= 2 || input.toLowerCase().includes("まとめ")) {
+        const parsed = parseGptSessionResult(reply);
+        console.log("Parsed actions:", parsed.actions);
+        setParsedResult(parsed);
+      }
     } catch (error: any) {
-      console.error(error);
-      setError(error.message || "An error occurred");
+      console.error("Error:", error);
+      setError(error.message || "エラーが発生しました");
     } finally {
       setLoading(false);
     }
@@ -139,13 +305,43 @@ export default function SessionPage() {
     }
   };
 
+  const handleActionSelect = (action: string) => {
+    const storedTodos: Todo[] = JSON.parse(localStorage.getItem("todos") || "[]");
+    // 現在の日付を "YYYY-MM-DD" 形式で設定
+    const currentDate = new Date().toISOString().split("T")[0];
+    const newTodo = {
+      id: storedTodos.length + 1,
+      text: action,
+      done: false,
+      date: currentDate, // 現在の日付を設定
+    };
+
+    const updatedTodos = [...storedTodos, newTodo];
+    console.log("Adding todo:", newTodo);
+    localStorage.setItem("todos", JSON.stringify(updatedTodos));
+
+    saveLog("select_action", { action });
+
+    router.push("/todo");
+  };
+
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
-      <h1 className="text-2xl font-bold mb-4">哲学チャットセッション</h1>
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
+      <button
+        onClick={() => router.push("/todo")}
+        className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
+        aria-label="Go to Todo"
+      >
+        <FaCalendarAlt size={24} />
+      </button>
+
+      <div className="flex items-center justify-center mb-4">
+        <img src="/nbrcd_logo.png" alt="nbrcd logo" className="w-12 h-12 mr-2" />
+        <h1 className="text-2xl font-bold">nbrcd</h1>
+      </div>
       {error && <div className="text-red-500 mb-4">{error}</div>}
       {loading && <div className="text-gray-500 mb-4">処理中...</div>}
 
-      {/* 哲学セレクター */}
       <div className="mb-6">
         <label className="block mb-1">哲学を選択：</label>
         <select
@@ -162,8 +358,10 @@ export default function SessionPage() {
         </select>
       </div>
 
-      {/* チャットログ */}
-      <div className="flex-1 overflow-y-auto mb-4 border p-4 rounded bg-gray-50">
+      <div
+        ref={chatContainer}
+        className="flex-1 overflow-y-auto mb-4 border p-4 rounded bg-gray-50"
+      >
         {messages
           .filter((m) => m.role !== "system")
           .map((msg, idx) => (
@@ -175,7 +373,29 @@ export default function SessionPage() {
           ))}
       </div>
 
-      {/* 入力フォーム */}
+      {parsedResult && (
+        <div className="mb-6">
+          <h2 className="text-xl font-bold mb-2">アクションプラン</h2>
+          <h3 className="font-semibold mb-1">アクションを選択:</h3>
+          <ul className="space-y-2 mb-4">
+            {parsedResult.actions.map((action, idx) => (
+              <li key={idx}>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    onChange={() => handleActionSelect(action)}
+                    className="mr-2 h-5 w-5"
+                  />
+                  <span>{action}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <UsageStats messages={messages} parsedResult={parsedResult} />
+
       <div className="flex space-x-2">
         <input
           value={input}

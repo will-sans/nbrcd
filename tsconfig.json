@@ -18,8 +18,9 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".", // プロジェクトのルートディレクトリを基準に
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["src/*"] // @/ を src/ にマッピング  
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
