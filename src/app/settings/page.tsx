@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ActionLog } from "@/types/actionLog";
-import { FaHome } from "react-icons/fa";
+import { FaComments, FaCalendarAlt } from "react-icons/fa"; // FaHome を FaComments に変更、FaCalendarAlt を追加
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 interface UsageStatsProps {
@@ -95,6 +95,7 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
         <div className="p-4 border rounded bg-gray-100">
           <h2 className="text-xl font-bold mb-2">使用統計</h2>
           <p>セッション数: {stats.sessionCount}</p>
+udi
           <p>平均使用時間: {stats.averageDuration.toFixed(2)} 秒</p>
 
           {sessionData.length > 0 && (
@@ -120,17 +121,25 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [messages] = useState<Message[]>([]); // ダミーデータ（必要に応じて調整）
-  const [parsedResult] = useState<ParsedSessionResult | null>(null); // ダミーデータ（必要に応じて調整）
+  const [messages] = useState<Message[]>([]);
+  const [parsedResult] = useState<ParsedSessionResult | null>(null);
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white{min-h-screen flex flex-col relative">
       <button
         onClick={() => router.push("/")}
         className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
         aria-label="Go to Home"
       >
-        <FaHome size={24} />
+        <FaComments size={24} /> {/* FaHome を FaComments に変更 */}
+      </button>
+
+      <button
+        onClick={() => router.push("/todo")} // カレンダーアイコンを追加
+        className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
+        aria-label="Go to Todo"
+      >
+        <FaCalendarAlt size={24} />
       </button>
 
       <h1 className="text-2xl font-bold mb-4 text-center">設定</h1>

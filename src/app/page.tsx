@@ -7,7 +7,7 @@ import { philosophers } from "@/data/philosophers";
 import { parseGptSessionResult, ParsedSessionResult } from "@/lib/parseGptSessionResult";
 import { v4 as uuidv4 } from "uuid";
 import { ActionLog } from "@/types/actionLog";
-import { FaCalendarAlt, FaBars } from "react-icons/fa"; // FaBars を追加
+import { FaCalendarAlt, FaBars } from "react-icons/fa";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -240,109 +240,126 @@ export default function Page() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
-      {/* 左上に「二」マーク（設定画面への遷移ボタン）を追加 */}
-      <button
-        onClick={() => router.push("/settings")}
-        className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
-        aria-label="Go to Settings"
-      >
-        <FaBars size={24} />
-      </button>
+    <div className="flex flex-col h-screen text-black bg-white">
+      {/* 上部固定：タイトルと哲学セレクター */}
+      <div className="fixed top-0 left-0 right-0 bg-white z-10 p-6">
+        <div className="max-w-2xl mx-auto relative">
+          <button
+            onClick={() => router.push("/settings")}
+            className="absolute top-4 left-0 text-gray-600 hover:text-gray-800"
+            aria-label="Go to Settings"
+          >
+            <FaBars size={24} />
+          </button>
 
-      <button
-        onClick={() => router.push("/todo")}
-        className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
-        aria-label="Go to Todo"
-      >
-        <FaCalendarAlt size={24} />
-      </button>
+          <button
+            onClick={() => router.push("/todo")}
+            className="absolute top-4 right-0 text-gray-600 hover:text-gray-800"
+            aria-label="Go to Todo"
+          >
+            <FaCalendarAlt size={24} />
+          </button>
 
-      <div className="flex items-center justify-center mb-4">
-        <Image
-          src="/nbrcd_logo.png"
-          alt="nbrcd Logo"
-          width={48}
-          height={48}
-          className="mr-2"
-        />
-        <h1 className="text-2xl font-bold">nbrcd</h1>
-      </div>
-      {error && <div className="text-red-500 mb-4">{error}</div>}
-      {loading && <div className="text-gray-500 mb-4">処理中...</div>}
+          <div className="flex items-center justify-center mb-4">
+            <Image
+              src="/nbrcd_logo.png"
+              alt="nbrcd Logo"
+              width={48}
+              height={48}
+              className="mr-2"
+            />
+            <h1 className="text-2xl font-bold">nbrcd</h1>
+          </div>
 
-      <div className="mb-6">
-        <label className="block mb-1">哲学を選択：</label>
-        <select
-          value={selectedPhilosopherId}
-          onChange={(e) => setSelectedPhilosopherId(e.target.value)}
-          className="border p-2 w-full"
-          disabled={sessionStarted}
-        >
-          {philosophers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div
-        ref={chatContainer}
-        className="flex-1 overflow-y-auto mb-4 border p-4 rounded bg-gray-50"
-      >
-        {messages
-          .filter((m) => m.role !== "system")
-          .map((msg, idx) => (
-            <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
-              <span className="inline-block px-3 py-2 rounded bg-blue-100">
-                {msg.content}
-              </span>
-            </div>
-          ))}
-      </div>
-
-      {parsedResult && (
-        <div className="mb-6">
-          <h2 className="text-xl font-bold mb-2">アクションプラン</h2>
-          <h3 className="font-semibold mb-1">アクションを選択:</h3>
-          <ul className="space-y-2 mb-4">
-            {parsedResult.actions.map((action, idx) => (
-              <li key={idx}>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    onChange={() => {
-                      handleActionSelect(action);
-                    }}
-                    className="mr-2 h-5 w-5"
-                  />
-                  <span>{action}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
+          <div className="mb-6">
+            <label className="block mb-1">哲学を選択：</label>
+            <select
+              value={selectedPhilosopherId}
+              onChange={(e) => setSelectedPhilosopherId(e.target.value)}
+              className="border p-2 w-full"
+              disabled={sessionStarted}
+            >
+              {philosophers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* UsageStats コンポーネントを削除 */}
+      {/* スクロールエリア：チャット部分 */}
+      <div className="flex-1 overflow-y-auto mt-48 mb-20 max-w-2xl mx-auto w-full px-6">
+        {error && <div className="text-red-500 mb-4">{error}</div>}
+        {loading && <div className="text-gray-500 mb-4">処理中...</div>}
 
-      <div className="flex space-x-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleInputKeyDown}
-          placeholder="ここに答えや考えを書いてください..."
-          className="border p-2 flex-1 rounded"
-          disabled={loading}
-        />
-        <button
-          onClick={sessionStarted ? handleSendDuringSession : handleStartSession}
-          disabled={loading}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+        <div
+          ref={chatContainer}
+          className="flex-1 border p-4 rounded bg-gray-50"
         >
-          {sessionStarted ? "送信" : "セッション開始"}
-        </button>
+          {messages
+            .filter((m) => m.role !== "system")
+            .map((msg, idx) => (
+              <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
+                {msg.role === "user" ? (
+                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black">
+                    {msg.content}
+                  </span>
+                ) : (
+                  <span className="text-black">
+                    {msg.content}
+                  </span>
+                )}
+              </div>
+            ))}
+        </div>
+
+        {parsedResult && (
+          <div className="mb-6">
+            <h2 className="text-xl font-bold mb-2">アクションプラン</h2>
+            <h3 className="font-semibold mb-1">アクションを選択:</h3>
+            <ul className="space-y-2 mb-4">
+              {parsedResult.actions.map((action, idx) => (
+                <li key={idx}>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      onChange={() => {
+                        handleActionSelect(action);
+                      }}
+                      className="mr-2 h-5 w-5"
+                    />
+                    <span>{action}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* 下部固定：入力エリア */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white z-10 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex space-x-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder="ここに答えや考えを書いてください..."
+              className="border p-2 flex-1 rounded"
+              disabled={loading}
+            />
+            <button
+              onClick={sessionStarted ? handleSendDuringSession : handleStartSession}
+              disabled={loading}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+            >
+              {sessionStarted ? "送信" : "セッション開始"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
