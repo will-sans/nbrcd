@@ -241,9 +241,9 @@ export default function Page() {
 
   return (
     <div className="flex flex-col h-screen text-black bg-white">
-      {/* 上部固定：タイトルと哲学セレクター */}
+      {/* 上部固定：ロゴと哲学セレクターを横に並べる */}
       <div className="fixed top-0 left-0 right-0 bg-white z-10 p-6">
-        <div className="max-w-2xl mx-auto relative">
+        <div className="max-w-2xl mx-auto relative flex items-center justify-between">
           <button
             onClick={() => router.push("/settings")}
             className="absolute top-4 left-0 text-gray-600 hover:text-gray-800"
@@ -260,37 +260,34 @@ export default function Page() {
             <FaCalendarAlt size={24} />
           </button>
 
-          <div className="flex items-center justify-center mb-4">
+          <div className="flex items-center justify-center w-full space-x-4">
             <Image
               src="/nbrcd_logo.png"
               alt="nbrcd Logo"
               width={48}
               height={48}
-              className="mr-2"
             />
-            <h1 className="text-2xl font-bold">nbrcd</h1>
-          </div>
-
-          <div className="mb-6">
-            <label className="block mb-1">哲学を選択：</label>
-            <select
-              value={selectedPhilosopherId}
-              onChange={(e) => setSelectedPhilosopherId(e.target.value)}
-              className="border p-2 w-full"
-              disabled={sessionStarted}
-            >
-              {philosophers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex-1">
+              <label className="block mb-1">哲学を選択：</label>
+              <select
+                value={selectedPhilosopherId}
+                onChange={(e) => setSelectedPhilosopherId(e.target.value)}
+                className="border p-2 w-full"
+                disabled={sessionStarted}
+              >
+                {philosophers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
 
       {/* スクロールエリア：チャット部分 */}
-      <div className="flex-1 overflow-y-auto mt-48 mb-20 max-w-2xl mx-auto w-full px-6">
+      <div className="flex-1 overflow-y-auto mt-32 mb-20 max-w-2xl mx-auto w-full px-6"> {/* mt-32 に調整（上部エリアの高さが減った分） */}
         {error && <div className="text-red-500 mb-4">{error}</div>}
         {loading && <div className="text-gray-500 mb-4">処理中...</div>}
 
@@ -303,11 +300,11 @@ export default function Page() {
             .map((msg, idx) => (
               <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
                 {msg.role === "user" ? (
-                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black">
+                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-sm"> {/* フォントサイズを小さく */}
                     {msg.content}
                   </span>
                 ) : (
-                  <span className="text-black">
+                  <span className="text-black whitespace-pre-line"> {/* 改行を有効化 */}
                     {msg.content}
                   </span>
                 )}
@@ -348,7 +345,7 @@ export default function Page() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="ここに答えや考えを書いてください..."
-              className="border p-2 flex-1 rounded"
+              className="border p-2 flex-1 rounded text-sm" 
               disabled={loading}
             />
             <button
