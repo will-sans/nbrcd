@@ -33,6 +33,7 @@ export default function Page() {
   const [parsedResult, setParsedResult] = useState<ParsedSessionResult | null>(null);
   const [sessionId] = useState<string>(uuidv4());
   const chatContainer = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null); // 入力ボックスの参照を追加
 
   useEffect(() => {
     chatContainer.current?.scrollTo({
@@ -140,6 +141,7 @@ export default function Page() {
       setError(error instanceof Error ? error.message : "エラーが発生しました");
     } finally {
       setLoading(false);
+      inputRef.current?.blur(); // 送信後にフォーカスを解除
     }
   };
 
@@ -207,6 +209,7 @@ export default function Page() {
       setError(error instanceof Error ? error.message : "エラーが発生しました");
     } finally {
       setLoading(false);
+      inputRef.current?.blur(); // 送信後にフォーカスを解除
     }
   };
 
@@ -240,7 +243,7 @@ export default function Page() {
   };
 
   return (
-    <div className="flex flex-col h-screen text-black bg-white">
+    <div className="flex flex-col h-[100dvh] text-black bg-white"> {/* h-screen を h-[100dvh] に変更 */}
       {/* 上部固定：ロゴと哲学セレクターを横に並べる */}
       <div className="fixed top-0 left-0 right-0 bg-white z-10 p-6">
         <div className="max-w-2xl mx-auto relative flex items-center justify-between">
@@ -267,7 +270,7 @@ export default function Page() {
               width={48}
               height={48}
             />
-            <div className="w-1/3"> {/* 幅を1/3に縮小 */}
+            <div className="w-1/3">
               <label className="block mb-1">哲学を選択：</label>
               <select
                 value={selectedPhilosopherId}
@@ -300,7 +303,7 @@ export default function Page() {
             .map((msg, idx) => (
               <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
                 {msg.role === "user" ? (
-                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-sm">
+                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-base"> {/* text-sm を text-base に変更 */}
                     {msg.content}
                   </span>
                 ) : (
@@ -341,11 +344,12 @@ export default function Page() {
         <div className="max-w-2xl mx-auto">
           <div className="flex space-x-2">
             <input
+              ref={inputRef} // 参照を追加
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="ここに答えや考えを書いてください..."
-              className="border p-2 flex-1 rounded text-sm"
+              className="border p-2 flex-1 rounded text-base" 
               disabled={loading}
             />
             <button
