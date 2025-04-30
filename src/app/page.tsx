@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { philosophers } from "@/data/philosophers";
+import { questions } from "@/data/questions";
 import { parseGptSessionResult, ParsedSessionResult } from "@/lib/parseGptSessionResult";
 import { v4 as uuidv4 } from "uuid";
 import { ActionLog } from "@/types/actionLog";
@@ -21,6 +22,16 @@ interface Todo {
   date?: string;
 }
 
+interface Question {
+  id: number;
+  philosophy: string;
+  question: string;
+  learning: string;
+  title: string;
+  intro: string;
+  callToAction: string;
+}
+
 export default function Page() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -32,8 +43,34 @@ export default function Page() {
   const [systemMessage, setSystemMessage] = useState<Message | null>(null);
   const [parsedResult, setParsedResult] = useState<ParsedSessionResult | null>(null);
   const [sessionId] = useState<string>(uuidv4());
+  const [dailyQuestion, setDailyQuestion] = useState<Question | null>(null);
   const chatContainer = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null); // 入力ボックスの参照を追加
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 哲学選択時にランダムな質問を抽出
+  useEffect(() => {
+    console.log("Selected Philosopher ID:", selectedPhilosopherId);
+    console.log("All Questions:", questions);
+
+    const filteredQuestions = questions.filter((q) => {
+      const matches = q.philosophy.toLowerCase() === selectedPhilosopherId.toLowerCase();
+      console.log(
+        `Filtering: philosophy=${q.philosophy}, selected=${selectedPhilosopherId}, matches=${matches}`
+      );
+      return matches;
+    });
+
+    console.log("Filtered Questions:", filteredQuestions);
+
+    if (filteredQuestions.length > 0) {
+      const randomIndex = Math.floor(Math.random() * filteredQuestions.length);
+      setDailyQuestion(filteredQuestions[randomIndex]);
+      setError(null);
+    } else {
+      setDailyQuestion(null);
+      setError("選択した哲学に対応する質問が見つかりません。別の哲学を選択してください。");
+    }
+  }, [selectedPhilosopherId]);
 
   useEffect(() => {
     chatContainer.current?.scrollTo({
@@ -84,9 +121,15 @@ export default function Page() {
       return;
     }
 
+    if (!dailyQuestion) {
+      setError("質問が見つかりません。別の哲学を選択してください。");
+      return;
+    }
+
+    const systemPromptWithQuestion = `${selectedPhilosopher.systemPrompt}\n\n質問: ${dailyQuestion.question}\n学習ポイント: ${dailyQuestion.learning}`;
     const newSystemMessage: Message = {
       role: "system",
-      content: selectedPhilosopher.systemPrompt,
+      content: systemPromptWithQuestion,
     };
     setSystemMessage(newSystemMessage);
 
@@ -141,7 +184,7 @@ export default function Page() {
       setError(error instanceof Error ? error.message : "エラーが発生しました");
     } finally {
       setLoading(false);
-      inputRef.current?.blur(); // 送信後にフォーカスを解除
+      inputRef.current?.blur();
     }
   };
 
@@ -209,7 +252,7 @@ export default function Page() {
       setError(error instanceof Error ? error.message : "エラーが発生しました");
     } finally {
       setLoading(false);
-      inputRef.current?.blur(); // 送信後にフォーカスを解除
+      inputRef.current?.blur();
     }
   };
 
@@ -243,7 +286,7 @@ export default function Page() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] text-black bg-white"> {/* h-screen を h-[100dvh] に変更 */}
+    <div className="flex flex-col h-[100dvh] text-black bg-white">
       {/* 上部固定：ロゴと哲学セレクターを横に並べる */}
       <div className="fixed top-0 left-0 right-0 bg-white z-10 p-6">
         <div className="max-w-2xl mx-auto relative flex items-center justify-between">
@@ -271,7 +314,6 @@ export default function Page() {
               height={48}
             />
             <div className="w-1/3">
-              <label className="block mb-1">哲学を選択：</label>
               <select
                 value={selectedPhilosopherId}
                 onChange={(e) => setSelectedPhilosopherId(e.target.value)}
@@ -289,21 +331,26 @@ export default function Page() {
         </div>
       </div>
 
-      {/* スクロールエリア：チャット部分 */}
+      {/* スクロールエリア：今日の問いとチャット部分 */}
       <div className="flex-1 overflow-y-auto mt-32 mb-20 max-w-2xl mx-auto w-full px-6">
+        {dailyQuestion && !sessionStarted && (
+          <div className="mb-6 p-4 bg-gray-100 rounded-lg">
+            <h2 className="text-xl font-bold mb-2">{dailyQuestion.title}</h2>
+            <p className="mb-2 whitespace-pre-line">{dailyQuestion.intro}</p>
+            <p className="font-semibold">{dailyQuestion.callToAction}</p>
+          </div>
+        )}
+
         {error && <div className="text-red-500 mb-4">{error}</div>}
         {loading && <div className="text-gray-500 mb-4">処理中...</div>}
 
-        <div
-          ref={chatContainer}
-          className="flex-1 border p-4 rounded bg-gray-50"
-        >
+        <div ref={chatContainer} className="flex-1 border p-4 rounded bg-gray-50">
           {messages
             .filter((m) => m.role !== "system")
             .map((msg, idx) => (
               <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
                 {msg.role === "user" ? (
-                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-base"> {/* text-sm を text-base に変更 */}
+                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-base">
                     {msg.content}
                   </span>
                 ) : (
@@ -344,12 +391,12 @@ export default function Page() {
         <div className="max-w-2xl mx-auto">
           <div className="flex space-x-2">
             <input
-              ref={inputRef} // 参照を追加
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="ここに答えや考えを書いてください..."
-              className="border p-2 flex-1 rounded text-base" 
+              className="border p-2 flex-1 rounded text-base"
               disabled={loading}
             />
             <button
