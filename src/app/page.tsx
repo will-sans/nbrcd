@@ -111,7 +111,7 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
 
   const log: ActionLog = {
     action,
-    timestamp: new Date(), // 文字列ではなく Date オブジェクトを渡す
+    timestamp: new Date().toISOString(), // Date から ISO 8601 文字列に変換
     sessionId,
     philosopherId: selectedPhilosopherId,
     category: dailyQuestion?.category,
@@ -149,6 +149,7 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
     console.error("Failed to save log:", error);
   }
 };
+
   const handleStartSession = async () => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -209,7 +210,7 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: "gpt-4o-mini",
           messages: updatedMessages,
           temperature: 0.3,
         }),
@@ -272,7 +273,7 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o",
+          model: "gpt-4o-mini",
           messages: systemMessage ? [systemMessage, ...updatedMessages] : updatedMessages,
           temperature: 0.3,
         }),

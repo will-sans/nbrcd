@@ -8,29 +8,35 @@ datasource db {
 }
 
 model ActionLog {
-  id           Int      @id @default(autoincrement())
-  action       String
-  timestamp    String
-  sessionId    String
+  id            Int      @id @default(autoincrement())
+  action        String
+  timestamp     DateTime // String から DateTime に変更
+  sessionId     String
   philosopherId String
-  details      Json?
+  category      String?  // 追加
+  details       Json?
+  userId        Int      // 追加
+  user          User     @relation(fields: [userId], references: [id]) // リレーション追加
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        Int         @id @default(autoincrement())
+  username  String      @unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
   sessions  Session[]
+  actionLogs ActionLog[] // リレーション追加
 }
 
 model Session {
   id            Int      @id @default(autoincrement())
   userId        Int
   user          User     @relation(fields: [userId], references: [id])
-  conversation  Json     // 会話ログ（JSON形式で保存）
-  analysis      Json     // 分析データ（JSON形式で保存）
-  score         Int      // スコア
+  conversation  Json
+  analysis      Json
+  score         Int
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

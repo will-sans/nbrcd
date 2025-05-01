@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const log = await prisma.actionLog.create({
         data: {
           action,
-          timestamp: new Date(timestamp),
+          timestamp, // new Date(timestamp) を削除し、そのまま渡す
           sessionId,
           philosopherId,
           category,
@@ -60,4 +60,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } else {
     res.status(405).json({ error: "Method not allowed" });
   }
-} 
+}

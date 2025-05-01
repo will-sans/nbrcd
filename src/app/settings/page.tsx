@@ -6,25 +6,12 @@ import { ActionLog } from "@/types/actionLog";
 import { FaComments, FaCalendarAlt } from "react-icons/fa";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-interface UsageStatsProps {
-  messages: Message[];
-  parsedResult: ParsedSessionResult | null;
-}
-
-interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
-interface ParsedSessionResult {
-  actions: string[];
-}
-
 interface ActivitySummary {
   summary: string;
 }
 
-const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
+// UsageStatsProps インターフェースを削除し、props を受け取らない形に修正
+const UsageStats = () => {
   const [stats, setStats] = useState<{ sessionCount: number; averageDuration: number }>({
     sessionCount: 0,
     averageDuration: 0,
@@ -42,43 +29,41 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
       setSessionData([]);
       return;
     }
-
+  
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-
+  
       const response = await fetch(`/api/logs?userId=${userId}`, {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Failed to fetch logs: ${response.status}`);
       }
       const logs: ActionLog[] = await response.json();
       console.log("Fetched logs:", logs);
-
+  
       if (!logs || logs.length === 0) {
         setStats({ sessionCount: 0, averageDuration: 0 });
         setSessionData([]);
         return;
       }
-
+  
       const sessions: { [key: string]: ActionLog[] } = {};
       logs.forEach((log) => {
-        log.timestamp = new Date(log.timestamp);
         if (!sessions[log.sessionId]) {
           sessions[log.sessionId] = [];
         }
         sessions[log.sessionId].push(log);
       });
-
+  
       const sessionDurations: number[] = [];
       const sessionDetails: { sessionId: string; duration: number; startTime: string }[] = [];
       Object.values(sessions).forEach((sessionLogs) => {
         const startLog = sessionLogs.find((log) => log.action === "start_session");
-        // セッション内の最後のログを endLog として使用
         const endLog = sessionLogs
           .filter((log) => log.action !== "start_session")
           .reduce((latest: ActionLog | null, log: ActionLog) => {
@@ -87,10 +72,10 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
             }
             return latest;
           }, null);
-
+  
         if (startLog && endLog) {
-          const startTime = new Date(startLog.timestamp).getTime();
-          const endTime = new Date(endLog.timestamp).getTime();
+          const startTime = new Date(startLog.timestamp).getTime(); // ここで変換
+          const endTime = new Date(endLog.timestamp).getTime(); // ここで変換
           const duration = endTime >= startTime ? (endTime - startTime) / 1000 : 0;
           if (duration > 0) {
             sessionDurations.push(duration);
@@ -102,12 +87,12 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
           }
         }
       });
-
+  
       const averageDuration =
         sessionDurations.length > 0
           ? sessionDurations.reduce((sum, duration) => sum + duration, 0) / sessionDurations.length
           : 0;
-
+  
       setStats({ sessionCount: sessionDetails.length, averageDuration });
       setSessionData(sessionDetails);
       setError(null);
@@ -164,8 +149,6 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [messages] = useState<Message[]>([]);
-  const [parsedResult] = useState<ParsedSessionResult | null>(null);
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -202,7 +185,6 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // 週次サマリーレポートを生成
   const generateWeeklySummary = async () => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -344,7 +326,7 @@ ${userInputs.map((input, index) => `${index + 1}. ${input}`).join("\n")}
       </div>
 
       {/* 計測時間（使用統計） */}
-      <UsageStats messages={messages} parsedResult={parsedResult} />
+      <UsageStats />
 
       {/* 週次サマリーレポート */}
       <div className="mb-6 p-4 border rounded bg-gray-100">
