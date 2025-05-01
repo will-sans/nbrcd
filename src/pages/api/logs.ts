@@ -1,36 +1,63 @@
-// src/pages/api/logs.ts
-import type { NextApiRequest, NextApiResponse } from "next";
-import { ActionLog } from "../../types/actionLog";
+import { NextApiRequest, NextApiResponse } from "next";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  try {
-    if (req.method === "POST") {
-      const log: ActionLog = req.body;
-      await prisma.actionLog.create({
+  if (req.method === "POST") {
+    const { action, timestamp, sessionId, philosopherId, category, details, userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: "ユーザーIDが必要です" });
+    }
+
+    try {
+      const log = await prisma.actionLog.create({
         data: {
-          action: log.action,
-          timestamp: log.timestamp,
-          sessionId: log.sessionId,
-          philosopherId: log.philosopherId,
-          details: log.details,
+          action,
+          timestamp: new Date(timestamp),
+          sessionId,
+          philosopherId,
+          category,
+          details: details || {},
+          userId: parseInt(userId),
         },
       });
-      console.log("Received log:", log);
-      res.status(200).json({ message: "Log saved" });
-    } else if (req.method === "GET") {
-      const logs = await prisma.actionLog.findMany();
-      console.log("Returning logs:", logs);
-      res.status(200).json(logs);
-    } else {
-      res.status(405).json({ error: "Method not allowed" });
+      res.status(200).json(log);
+    } catch (error) {
+      console.error("Failed to save log:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: "ログの保存に失敗しました", details: error.message });
+      } else {
+        res.status(500).json({ error: "ログの保存に失敗しました", details: "不明なエラーが発生しました" });
+      }
     }
-  } catch (error) {
-    console.error("API Error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  } finally {
-    await prisma.$disconnect();
+  } else if (req.method === "GET") {
+    const userId = req.query.userId as string;
+
+    if (!userId) {
+      return res.status(400).json({ error: "ユーザーIDが必要です" });
+    }
+
+    try {
+      const logs = await prisma.actionLog.findMany({
+        where: {
+          userId: parseInt(userId),
+        },
+        orderBy: {
+          timestamp: "desc",
+        },
+      });
+      res.status(200).json(logs);
+    } catch (error) {
+      console.error("Failed to fetch logs:", error);
+      if (error instanceof Error) {
+        res.status(500).json({ error: "ログの取得に失敗しました", details: error.message });
+      } else {
+        res.status(500).json({ error: "ログの取得に失敗しました", details: "不明なエラーが発生しました" });
+      }
+    }
+  } else {
+    res.status(405).json({ error: "Method not allowed" });
   }
-}
+} 

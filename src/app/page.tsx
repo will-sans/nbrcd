@@ -22,6 +22,7 @@ interface Todo {
   date?: string;
 }
 
+// src/app/page.tsx
 interface Question {
   id: number;
   philosophy: string;
@@ -30,8 +31,8 @@ interface Question {
   title: string;
   intro: string;
   callToAction: string;
+  category?: string; // category プロパティを追加
 }
-
 export default function Page() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -103,49 +104,51 @@ export default function Page() {
     });
   }, [messages]);
 
-  const saveLog = async (action: string, details?: Record<string, string>) => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) return; // ユーザーが登録していない場合はログを保存しない
+// src/app/page.tsx
+const saveLog = async (action: string, details?: Record<string, string>) => {
+  const userId = localStorage.getItem("userId");
+  if (!userId) return;
 
-    const log: ActionLog = {
-      action,
-      timestamp: new Date().toISOString(),
-      sessionId,
-      philosopherId: selectedPhilosopherId,
-      details,
-    };
-
-    try {
-      const response = await fetch("/api/logs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(log),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to save log");
-      }
-      console.log("Successfully saved log to server:", log);
-
-      // 会話ログ、分析、スコアを Session テーブルに保存
-      await fetch("/api/sessions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: parseInt(userId),
-          conversation: messages,
-          analysis: { sessionCount: messages.length },
-          score: messages.length * 10, // 簡易スコア計算
-        }),
-      });
-    } catch (error) {
-      console.error("Failed to save log:", error);
-    }
+  const log: ActionLog = {
+    action,
+    timestamp: new Date(), // 文字列ではなく Date オブジェクトを渡す
+    sessionId,
+    philosopherId: selectedPhilosopherId,
+    category: dailyQuestion?.category,
+    details,
+    userId: parseInt(userId),
   };
 
+  try {
+    const response = await fetch("/api/logs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(log),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to save log");
+    }
+    console.log("Successfully saved log to server:", log);
+
+    await fetch("/api/sessions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: parseInt(userId),
+        conversation: messages,
+        analysis: { sessionCount: messages.length },
+        score: messages.length * 10,
+      }),
+    });
+  } catch (error) {
+    console.error("Failed to save log:", error);
+  }
+};
   const handleStartSession = async () => {
     const userId = localStorage.getItem("userId");
     if (!userId) {

@@ -20,6 +20,10 @@ interface ParsedSessionResult {
   actions: string[];
 }
 
+interface ActivitySummary {
+  summary: string;
+}
+
 const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
   const [stats, setStats] = useState<{ sessionCount: number; averageDuration: number }>({
     sessionCount: 0,
@@ -30,10 +34,27 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = async () => {
+    const userId = localStorage.getItem("userId");
+    console.log("Fetching logs for userId:", userId);
+    if (!userId) {
+      setError("ユーザー登録が必要です。セッションを開始してください。");
+      setStats({ sessionCount: 0, averageDuration: 0 });
+      setSessionData([]);
+      return;
+    }
+
     try {
-      const response = await fetch("/api/logs");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(`/api/logs?userId=${userId}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch logs: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch logs: ${response.status}`);
       }
       const logs: ActionLog[] = await response.json();
       console.log("Fetched logs:", logs);
@@ -46,6 +67,7 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
 
       const sessions: { [key: string]: ActionLog[] } = {};
       logs.forEach((log) => {
+        log.timestamp = new Date(log.timestamp);
         if (!sessions[log.sessionId]) {
           sessions[log.sessionId] = [];
         }
@@ -56,18 +78,28 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
       const sessionDetails: { sessionId: string; duration: number; startTime: string }[] = [];
       Object.values(sessions).forEach((sessionLogs) => {
         const startLog = sessionLogs.find((log) => log.action === "start_session");
-        const endLog = sessionLogs[sessionLogs.length - 1];
+        // セッション内の最後のログを endLog として使用
+        const endLog = sessionLogs
+          .filter((log) => log.action !== "start_session")
+          .reduce((latest: ActionLog | null, log: ActionLog) => {
+            if (!latest || new Date(log.timestamp) > new Date(latest.timestamp)) {
+              return log;
+            }
+            return latest;
+          }, null);
 
         if (startLog && endLog) {
           const startTime = new Date(startLog.timestamp).getTime();
-          const endTime = new Date(endLog.timestamp).getTime() - 1500;
-          const duration = (endTime - startTime) / 1000;
-          sessionDurations.push(duration);
-          sessionDetails.push({
-            sessionId: startLog.sessionId,
-            duration,
-            startTime: new Date(startLog.timestamp).toLocaleString(),
-          });
+          const endTime = new Date(endLog.timestamp).getTime();
+          const duration = endTime >= startTime ? (endTime - startTime) / 1000 : 0;
+          if (duration > 0) {
+            sessionDurations.push(duration);
+            sessionDetails.push({
+              sessionId: startLog.sessionId,
+              duration,
+              startTime: new Date(startLog.timestamp).toLocaleString(),
+            });
+          }
         }
       });
 
@@ -76,20 +108,20 @@ const UsageStats = ({ messages, parsedResult }: UsageStatsProps) => {
           ? sessionDurations.reduce((sum, duration) => sum + duration, 0) / sessionDurations.length
           : 0;
 
-      setStats({ sessionCount: sessionDurations.length, averageDuration });
+      setStats({ sessionCount: sessionDetails.length, averageDuration });
       setSessionData(sessionDetails);
       setError(null);
     } catch (error) {
       console.error("Failed to fetch logs:", error);
       setStats({ sessionCount: 0, averageDuration: 0 });
       setSessionData([]);
-      setError("ログの取得に失敗しました。しばらくしてから再度お試しください。");
+      setError(error instanceof Error ? error.message : "ログの取得に失敗しました。しばらくしてから再度お試しください。");
     }
   };
 
   useEffect(() => {
     fetchStats();
-  }, [messages, parsedResult]);
+  }, []);
 
   return (
     <div className="mt-4">
@@ -138,8 +170,10 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActionLog[]>([]);
+  const [weeklySummary, setWeeklySummary] = useState<ActivitySummary | null>(null);
 
-  // 登録済みユーザー名を取得
+  // 登録済みユーザー名とアクティビティログを取得
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
@@ -152,10 +186,87 @@ export default function SettingsPage() {
           console.error("Failed to fetch user:", err);
           setCurrentUser("ゲスト");
         });
+
+      // ユーザーアクティビティログを取得
+      fetch(`/api/logs?userId=${userId}`)
+        .then((res) => res.json())
+        .then((logs) => {
+          setActivityLogs(logs);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch activity logs:", err);
+          setError("アクティビティログの取得に失敗しました");
+        });
     } else {
       setCurrentUser("ゲスト");
     }
   }, []);
+
+  // 週次サマリーレポートを生成
+  const generateWeeklySummary = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      setWeeklySummary({ summary: "ユーザー登録が必要です。セッションを開始してください。" });
+      return;
+    }
+
+    if (activityLogs.length === 0) {
+      setWeeklySummary({ summary: "アクティビティログがありません。セッションを開始してください。" });
+      return;
+    }
+
+    const userInputs = activityLogs
+      .filter((log) => log.details?.input)
+      .map((log) => log.details!.input);
+
+    if (userInputs.length === 0) {
+      setWeeklySummary({ summary: "ユーザーの入力がありません。セッションで対話を進めてください。" });
+      return;
+    }
+
+    const summaryPrompt = `
+以下のユーザーの入力を基に、週次サマリーレポートを自然言語で生成してください。ユーザーの入力を要約し、今後の学びや成長につながるアドバイスを提供してください。
+
+**ユーザーの入力**:
+${userInputs.map((input, index) => `${index + 1}. ${input}`).join("\n")}
+
+レポートは日本語で、簡潔に（3-5文程度）、ユーザーに気づきを与える内容にしてください。アドバイスは具体的で実行可能なものにしてください。
+`;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "あなたはユーザーのアクティビティログを分析し、学びや成長につながるアドバイスを提供するアシスタントです。" },
+            { role: "user", content: summaryPrompt },
+          ],
+          temperature: 0.3,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "サマリーレポートの生成に失敗しました");
+      }
+
+      const data = await response.json();
+      const summary = data.choices[0]?.message?.content || "レポートを生成できませんでした。";
+      setWeeklySummary({ summary });
+    } catch (err) {
+      console.error("Failed to generate summary:", err);
+      setWeeklySummary({ summary: err instanceof Error ? err.message : "レポートの生成に失敗しました。" });
+    }
+  };
 
   const handleRegister = async () => {
     if (!username || username.length < 3) {
@@ -232,7 +343,44 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* 計測時間（使用統計） */}
       <UsageStats messages={messages} parsedResult={parsedResult} />
+
+      {/* 週次サマリーレポート */}
+      <div className="mb-6 p-4 border rounded bg-gray-100">
+        <h2 className="text-xl font-bold mb-2">週次サマリーレポート</h2>
+        <button
+          onClick={generateWeeklySummary}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mb-4"
+        >
+          サマリーレポートを生成
+        </button>
+        {weeklySummary && (
+          <div>
+            <p className="whitespace-pre-line">{weeklySummary.summary}</p>
+          </div>
+        )}
+      </div>
+
+      {/* アクティビティログ */}
+      <div className="mb-6 p-4 border rounded bg-gray-100">
+        <h2 className="text-xl font-bold mb-2">アクティビティログ</h2>
+        {activityLogs.length > 0 ? (
+          <ul className="space-y-2">
+            {activityLogs.map((log, index) => (
+              <li key={index} className="border-b pb-2">
+                <p><strong>アクション:</strong> {log.action}</p>
+                <p><strong>哲学者:</strong> {log.philosopherId}</p>
+                {log.category && <p><strong>カテゴリ:</strong> {log.category}</p>}
+                <p><strong>時間:</strong> {new Date(log.timestamp).toLocaleString()}</p>
+                {log.details && <p><strong>詳細:</strong> {JSON.stringify(log.details)}</p>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500">アクティビティログがありません。セッションを開始してください。</p>
+        )}
+      </div>
     </div>
   );
 }
