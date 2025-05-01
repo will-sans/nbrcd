@@ -15,3 +15,22 @@ model ActionLog {
   philosopherId String
   details      Json?
 }
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions  Session[]
+}
+
+model Session {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  conversation  Json     // 会話ログ（JSON形式で保存）
+  analysis      Json     // 分析データ（JSON形式で保存）
+  score         Int      // スコア
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

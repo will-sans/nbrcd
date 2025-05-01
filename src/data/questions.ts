@@ -690,7 +690,7 @@ export const questions = [
     "title": "【今日の問い】経営判断に迷ったとき、原理原則に立ち返れていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -702,7 +702,7 @@ export const questions = [
     "title": "【今日の問い】本質を見ようとせずに常識に流されていませんか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -714,7 +714,7 @@ export const questions = [
     "title": "【今日の問い】今日の判断は、子どもに胸を張って説明できますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -726,7 +726,7 @@ export const questions = [
     "title": "【今日の問い】なぜそれが正しいと言えるのか、自分で説明できますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -738,7 +738,7 @@ export const questions = [
     "title": "【今日の問い】あなたの行動は、誰かに恥ずかしくないものですか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -750,7 +750,7 @@ export const questions = [
     "title": "【今日の問い】“なぜ”を繰り返し、本質にたどり着いていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -762,7 +762,7 @@ export const questions = [
     "title": "【今日の問い】あなたの会話に原理原則は宿っていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -774,7 +774,7 @@ export const questions = [
     "title": "【今日の問い】会計の数字を、行動で説明できますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -786,7 +786,7 @@ export const questions = [
     "title": "【今日の問い】なぜこの制度があるのか、疑問を持てていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -798,7 +798,7 @@ export const questions = [
     "title": "【今日の問い】数字や常識を、盲信していませんか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -810,7 +810,7 @@ export const questions = [
     "title": "【今日の問い】間違いを恐れて意見を抑えていませんか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -822,7 +822,7 @@ export const questions = [
     "title": "【今日の問い】自分が選んだ減価償却の年数に誇りを持てますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -834,7 +834,7 @@ export const questions = [
     "title": "【今日の問い】その会計処理、本当に現場の実態と合っていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -846,7 +846,7 @@ export const questions = [
     "title": "【今日の問い】「他社がこうしてるから」で安心していませんか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -858,7 +858,7 @@ export const questions = [
     "title": "【今日の問い】会計処理を、経営判断の言い訳にしていませんか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -870,7 +870,7 @@ export const questions = [
     "title": "【今日の問い】自社の価値を、数字で語れていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -882,7 +882,7 @@ export const questions = [
     "title": "【今日の問い】「売上を最大に、経費を最小に」という言葉、実行できていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -894,7 +894,7 @@ export const questions = [
     "title": "【今日の問い】費用が正当かどうか、毎回考えていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -906,7 +906,7 @@ export const questions = [
     "title": "【今日の問い】仕入れや原価の背景にある工夫を意識していますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -918,7 +918,7 @@ export const questions = [
     "title": "【今日の問い】価格設定に哲学がありますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -930,7 +930,7 @@ export const questions = [
     "title": "【今日の問い】今日の売値は「誰のための値段」ですか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -942,7 +942,7 @@ export const questions = [
     "title": "【今日の問い】ライバルを真似る前に、自分たちの目的を考えていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -954,7 +954,7 @@ export const questions = [
     "title": "【今日の問い】“安さ”に流されず、価値を語れていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -966,7 +966,7 @@ export const questions = [
     "title": "【今日の問い】会計を「未来のための道具」として使えていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -978,7 +978,7 @@ export const questions = [
     "title": "【今日の問い】部門別の数字に物語を感じていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -990,7 +990,7 @@ export const questions = [
     "title": "【今日の問い】計算書類を、現場のリーダー育成に使えていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -1002,7 +1002,7 @@ export const questions = [
     "title": "【今日の問い】決算書に“感情”を読み取れていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -1014,7 +1014,7 @@ export const questions = [
     "title": "【今日の問い】常識とされる数字基準を盲信していませんか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -1026,7 +1026,7 @@ export const questions = [
     "title": "【今日の問い】今日見ている数字は“今”の経営に役立っていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"
@@ -1038,7 +1038,7 @@ export const questions = [
     "title": "【今日の問い】あなたの意思は、数字に表れていますか？",
     "intro": "おはようございます、〇〇さん。\n今日の問いが、あなたの意思と経営をつなげる一歩になりますように。",
     "callToAction": "感じたことを、ここに書いてみてください👇",
-    "book": "私の会計学の思想",
+    "book": "実学",
     "chapter": "序章",
     "category": "本質思考と判断基準",
     "philosophy": "inamori"

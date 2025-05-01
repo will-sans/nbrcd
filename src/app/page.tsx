@@ -44,8 +44,27 @@ export default function Page() {
   const [parsedResult, setParsedResult] = useState<ParsedSessionResult | null>(null);
   const [sessionId] = useState<string>(uuidv4());
   const [dailyQuestion, setDailyQuestion] = useState<Question | null>(null);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
   const chatContainer = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // ユーザー名を取得
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (userId) {
+      fetch(`/api/users/me?userId=${userId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setCurrentUser(data.username);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch user:", err);
+          setCurrentUser("ゲスト");
+        });
+    } else {
+      setCurrentUser("ゲスト");
+    }
+  }, []);
 
   // 哲学選択時にランダムな質問を抽出
   useEffect(() => {
@@ -64,13 +83,18 @@ export default function Page() {
 
     if (filteredQuestions.length > 0) {
       const randomIndex = Math.floor(Math.random() * filteredQuestions.length);
-      setDailyQuestion(filteredQuestions[randomIndex]);
+      const selectedQuestion = filteredQuestions[randomIndex];
+      // ユーザー名を intro に組み込む
+      if (currentUser && selectedQuestion) {
+        selectedQuestion.intro = selectedQuestion.intro.replace("〇〇さん", `${currentUser}さん`);
+      }
+      setDailyQuestion(selectedQuestion);
       setError(null);
     } else {
       setDailyQuestion(null);
       setError("選択した哲学に対応する質問が見つかりません。別の哲学を選択してください。");
     }
-  }, [selectedPhilosopherId]);
+  }, [selectedPhilosopherId, currentUser]);
 
   useEffect(() => {
     chatContainer.current?.scrollTo({
@@ -80,6 +104,9 @@ export default function Page() {
   }, [messages]);
 
   const saveLog = async (action: string, details?: Record<string, string>) => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) return; // ユーザーが登録していない場合はログを保存しない
+
     const log: ActionLog = {
       action,
       timestamp: new Date().toISOString(),
@@ -100,12 +127,32 @@ export default function Page() {
         throw new Error("Failed to save log");
       }
       console.log("Successfully saved log to server:", log);
+
+      // 会話ログ、分析、スコアを Session テーブルに保存
+      await fetch("/api/sessions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: parseInt(userId),
+          conversation: messages,
+          analysis: { sessionCount: messages.length },
+          score: messages.length * 10, // 簡易スコア計算
+        }),
+      });
     } catch (error) {
       console.error("Failed to save log:", error);
     }
   };
 
   const handleStartSession = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      setError("セッションを開始するにはユーザー登録が必要です。設定ページで登録してください。");
+      return;
+    }
+
     if (!input.trim()) {
       setError("入力してください");
       return;
@@ -126,7 +173,11 @@ export default function Page() {
       return;
     }
 
-    const systemPromptWithQuestion = `${selectedPhilosopher.systemPrompt}\n\n質問: ${dailyQuestion.question}\n学習ポイント: ${dailyQuestion.learning}`;
+    const systemPromptWithQuestion = selectedPhilosopher.systemPrompt
+      .replace("{質問}", dailyQuestion.question)
+      .replace("{学習ポイント}", dailyQuestion.learning)
+      .replace("{ユーザー入力}", input.trim());
+
     const newSystemMessage: Message = {
       role: "system",
       content: systemPromptWithQuestion,
