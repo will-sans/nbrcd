@@ -34,6 +34,56 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // セッション記録用のユーティリティ
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) return;
+
+    const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSessionId(newSessionId);
+    localStorage.setItem("sessionId", newSessionId);
+
+    // philosopherId が設定されている場合のみセッション開始ログを記録
+    if (selectedPhilosopherId) {
+      console.log("Recording start_session with philosopherId:", selectedPhilosopherId);
+      fetch("/api/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          sessionId: newSessionId,
+          action: "start_session",
+          timestamp: new Date().toISOString(),
+          philosopherId: selectedPhilosopherId,
+          category: dailyQuestion?.category,
+        }),
+      });
+    } else {
+      console.warn("Skipping start_session log: philosopherId is not set.");
+    }
+
+    // コンポーネントのアンマウント時にセッション終了ログを記録
+    return () => {
+      if (selectedPhilosopherId) {
+        console.log("Recording end_session with philosopherId:", selectedPhilosopherId);
+        fetch("/api/logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            sessionId: newSessionId,
+            action: "end_session",
+            timestamp: new Date().toISOString(),
+            philosopherId: selectedPhilosopherId,
+            category: dailyQuestion?.category,
+          }),
+        });
+      } else {
+        console.warn("Skipping end_session log: philosopherId is not set.");
+      }
+    };
+  }, [selectedPhilosopherId, dailyQuestion]); // selectedPhilosopherId と dailyQuestion を依存配列に追加
+
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
@@ -215,8 +265,6 @@ ${input.trim()}
     setLoading(true);
     setError(null);
     setParsedResult(null);
-    setSessionId(Date.now().toString());
-    setSelectedAction(null);
 
     await saveLog("start_session", { input: input.trim() });
 

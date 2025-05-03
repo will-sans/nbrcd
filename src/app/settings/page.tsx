@@ -96,36 +96,40 @@ const UsageStats = () => {
       const sessionDetails: { sessionId: string; duration: number; startTime: string }[] = [];
       Object.keys(sessions).forEach((sessionId) => {
         const sessionLogs = sessions[sessionId];
+        // セッションの開始ログを検索
         const startLog = sessionLogs.find((log) => log.action === "start_session");
-        const endLog = sessionLogs.find((log) => log.action === "end_session") ||
-                       sessionLogs
-                         .filter((log) => log.action !== "start_session")
-                         .reduce((latest: ActionLog | null, log: ActionLog) => {
-                           if (!latest || new Date(log.timestamp) > new Date(latest.timestamp)) {
-                             return log;
-                           }
-                           return latest;
-                         }, null);
+        // セッションの終了ログを検索（end_session または最後のアクション）
+        const endLog =
+          sessionLogs.find((log) => log.action === "end_session") ||
+          sessionLogs
+            .slice()
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .find((log) => log.action !== "start_session");
 
-        if (startLog && endLog) {
-          const startTime = new Date(startLog.timestamp).getTime();
-          const endTime = new Date(endLog.timestamp).getTime();
-          const duration = endTime >= startTime ? (endTime - startTime) / 1000 : 0;
-          if (duration > 0) {
-            sessionDurations.push(duration);
-            sessionDetails.push({
-              sessionId: startLog.sessionId,
-              duration,
-              startTime: new Date(startLog.timestamp).toLocaleString(),
-            });
-          } else {
-            console.log(`Invalid duration for session ${sessionId}: start=${startLog.timestamp}, end=${endLog.timestamp}`);
-          }
+        if (!startLog || !endLog) {
+          console.warn(`Missing start or end log for session ${sessionId}: startLog=${!!startLog}, endLog=${!!endLog}`);
+          return;
+        }
+
+        const startTime = new Date(startLog.timestamp).getTime();
+        const endTime = new Date(endLog.timestamp).getTime();
+        const duration = (endTime - startTime) / 1000;
+
+        console.log("Duration calculation:", { sessionId, startTime: startLog.timestamp, endTime: endLog.timestamp, duration });
+
+        if (duration >= 0) {
+          sessionDurations.push(duration);
+          sessionDetails.push({
+            sessionId: startLog.sessionId,
+            duration,
+            startTime: new Date(startLog.timestamp).toLocaleString(),
+          });
         } else {
-          console.log(`Session ${sessionId} is incomplete: startLog=${!!startLog}, endLog=${!!endLog}`);
+          console.warn(`セッション無効: ${sessionId}, start=${startLog.timestamp}, end=${endLog.timestamp}, duration=${duration}`);
         }
       });
 
+      // セッション詳細を時間順にソート（降順：最新のセッションが上）
       sessionDetails.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
       const averageDuration =
