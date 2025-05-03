@@ -1,55 +1,39 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { philosophers } from "@/data/philosophers";
 import { questions } from "@/data/questions";
-import { parseGptSessionResult, ParsedSessionResult } from "@/lib/parseGptSessionResult";
-import { v4 as uuidv4 } from "uuid";
+import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
-import { FaCalendarAlt, FaBars } from "react-icons/fa";
+import { FaBars, FaCheck } from "react-icons/fa";
 
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
 }
 
-interface Todo {
-  id: number;
-  text: string;
-  done: boolean;
-  date?: string;
+interface ParsedSessionResult {
+  actions: string[];
 }
 
-// src/app/page.tsx
-interface Question {
-  id: number;
-  philosophy: string;
-  question: string;
-  learning: string;
-  title: string;
-  intro: string;
-  callToAction: string;
-  category?: string; // category プロパティを追加
-}
-export default function Page() {
+export default function Home() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [selectedPhilosopherId, setSelectedPhilosopherId] = useState("drucker");
-  const [sessionStarted, setSessionStarted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sessionStarted, setSessionStarted] = useState(false);
   const [systemMessage, setSystemMessage] = useState<Message | null>(null);
   const [parsedResult, setParsedResult] = useState<ParsedSessionResult | null>(null);
-  const [sessionId] = useState<string>(uuidv4());
+  const [selectedPhilosopherId, setSelectedPhilosopherId] = useState<string>("");
   const [dailyQuestion, setDailyQuestion] = useState<Question | null>(null);
+  const [sessionId, setSessionId] = useState<string>("");
+  const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
-  const chatContainer = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ユーザー名を取得
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
@@ -67,96 +51,95 @@ export default function Page() {
     }
   }, []);
 
-  // 哲学選択時にランダムな質問を抽出
   useEffect(() => {
-    console.log("Selected Philosopher ID:", selectedPhilosopherId);
-    console.log("All Questions:", questions);
-
-    const filteredQuestions = questions.filter((q) => {
-      const matches = q.philosophy.toLowerCase() === selectedPhilosopherId.toLowerCase();
-      console.log(
-        `Filtering: philosophy=${q.philosophy}, selected=${selectedPhilosopherId}, matches=${matches}`
+    if (selectedPhilosopherId) {
+      const philosopherQuestions = questions.filter(
+        (q) => q.philosophy === selectedPhilosopherId
       );
-      return matches;
-    });
-
-    console.log("Filtered Questions:", filteredQuestions);
-
-    if (filteredQuestions.length > 0) {
-      const randomIndex = Math.floor(Math.random() * filteredQuestions.length);
-      const selectedQuestion = filteredQuestions[randomIndex];
-      // ユーザー名を intro に組み込む
-      if (currentUser && selectedQuestion) {
-        selectedQuestion.intro = selectedQuestion.intro.replace("〇〇さん", `${currentUser}さん`);
-      }
-      setDailyQuestion(selectedQuestion);
-      setError(null);
-    } else {
-      setDailyQuestion(null);
-      setError("選択した哲学に対応する質問が見つかりません。別の哲学を選択してください。");
+      setDailyQuestion(
+        philosopherQuestions[Math.floor(Math.random() * philosopherQuestions.length)]
+      );
+      setMessages([]);
+      setSessionStarted(false);
+      setParsedResult(null);
+      setSystemMessage(null);
+      setSelectedAction(null);
     }
-  }, [selectedPhilosopherId, currentUser]);
+  }, [selectedPhilosopherId]);
 
-  useEffect(() => {
-    chatContainer.current?.scrollTo({
-      top: chatContainer.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages]);
+  const saveLog = async (action: string, details?: Record<string, string>) => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) return;
 
-// src/app/page.tsx
-const saveLog = async (action: string, details?: Record<string, string>) => {
-  const userId = localStorage.getItem("userId");
-  if (!userId) return;
+    const log: ActionLog = {
+      action,
+      timestamp: new Date().toISOString(),
+      sessionId,
+      philosopherId: selectedPhilosopherId,
+      category: dailyQuestion?.category,
+      details,
+      userId: parseInt(userId),
+    };
 
-  const log: ActionLog = {
-    action,
-    timestamp: new Date().toISOString(), // Date から ISO 8601 文字列に変換
-    sessionId,
-    philosopherId: selectedPhilosopherId,
-    category: dailyQuestion?.category,
-    details,
-    userId: parseInt(userId),
+    try {
+      const response = await fetch("/api/logs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(log),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to save log");
+      }
+      console.log("Successfully saved log to server:", log);
+
+      await fetch("/api/sessions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: parseInt(userId),
+          conversation: messages,
+          analysis: { sessionCount: messages.length },
+          score: messages.length * 10,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to save log:", error);
+    }
   };
 
-  try {
-    const response = await fetch("/api/logs", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(log),
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to save log");
+  const parseGptSessionResult = (reply: string): ParsedSessionResult => {
+    const actionsMatch = reply.match(/1\. (.*), 2\. (.*), 3\. (.*)/);
+    if (actionsMatch) {
+      return {
+        actions: [actionsMatch[1], actionsMatch[2], actionsMatch[3]],
+      };
     }
-    console.log("Successfully saved log to server:", log);
+    return { actions: [] };
+  };
 
-    await fetch("/api/sessions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        userId: parseInt(userId),
-        conversation: messages,
-        analysis: { sessionCount: messages.length },
-        score: messages.length * 10,
-      }),
-    });
-  } catch (error) {
-    console.error("Failed to save log:", error);
-  }
-};
+  const saveActionToLocalStorageAndRedirect = (action: string) => {
+    const existingTodos = JSON.parse(localStorage.getItem("todos") || "[]");
+    const newTodo = {
+      id: Date.now() + Math.random(),
+      text: action,
+      completed: false,
+      date: new Date().toISOString(),
+    };
+    localStorage.setItem("todos", JSON.stringify([...existingTodos, newTodo]));
+    router.push("/todo/list");
+  };
+
+  const handleActionSelect = (action: string) => {
+    setSelectedAction(action);
+    saveActionToLocalStorageAndRedirect(action);
+  };
 
   const handleStartSession = async () => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setError("セッションを開始するにはユーザー登録が必要です。設定ページで登録してください。");
-      return;
-    }
-
     if (!input.trim()) {
       setError("入力してください");
       return;
@@ -199,18 +182,19 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
     setLoading(true);
     setError(null);
     setParsedResult(null);
+    setSessionId(Date.now().toString());
+    setSelectedAction(null);
 
     await saveLog("start_session", { input: input.trim() });
 
     try {
-      console.log("Sending messages:", updatedMessages);
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: updatedMessages,
           temperature: 0.3,
         }),
@@ -227,9 +211,7 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
 
       const newAssistantMessage: Message = {
         role: "assistant",
-        content: reply.match(/アクションプラン: .*$/m)
-          ? reply.replace(/アクションプラン: .*$/m, "").trim()
-          : reply,
+        content: reply,
       };
 
       setMessages((prev) => [...prev, newAssistantMessage]);
@@ -266,14 +248,13 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
     await saveLog("send_message", { input: input.trim() });
 
     try {
-      console.log("Sending messages:", systemMessage ? [systemMessage, ...updatedMessages] : updatedMessages);
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: systemMessage ? [systemMessage, ...updatedMessages] : updatedMessages,
           temperature: 0.3,
         }),
@@ -285,20 +266,20 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
       }
 
       const data = await response.json();
-      const reply = data.choices[0]?.message?.content || "";
+      let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
+
+      reply = reply.replace(/1\. .*, 2\. .*, 3\. .*/, "").trim();
 
       const newAssistantMessage: Message = {
         role: "assistant",
-        content: reply.match(/アクションプラン: .*$/m)
-          ? reply.replace(/アクションプラン: .*$/m, "").trim()
-          : reply,
+        content: reply,
       };
 
       setMessages((prev) => [...prev, newAssistantMessage]);
 
       if (messages.filter((m) => m.role === "user").length >= 2 || input.toLowerCase().includes("まとめ")) {
-        const parsed = parseGptSessionResult(reply);
+        const parsed = parseGptSessionResult(data.choices[0]?.message?.content || "");
         console.log("Parsed actions:", parsed.actions);
         setParsedResult(parsed);
       }
@@ -311,159 +292,149 @@ const saveLog = async (action: string, details?: Record<string, string>) => {
     }
   };
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !loading) {
-      if (sessionStarted) {
-        handleSendDuringSession();
-      } else {
-        handleStartSession();
-      }
+  const handlePhilosopherChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedPhilosopherId(e.target.value);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionStarted) {
+      handleStartSession();
+    } else {
+      handleSendDuringSession();
     }
   };
 
-  const handleActionSelect = async (action: string) => {
-    const storedTodos: Todo[] = JSON.parse(localStorage.getItem("todos") || "[]");
-    const currentDate = new Date().toISOString().split("T")[0];
-    const newTodo = {
-      id: storedTodos.length + 1,
-      text: action,
-      done: false,
-      date: currentDate,
-    };
-
-    const updatedTodos = [...storedTodos, newTodo];
-    console.log("Adding todo:", newTodo);
-    localStorage.setItem("todos", JSON.stringify(updatedTodos));
-
-    await saveLog("select_action", { action });
-
-    router.push("/todo");
-  };
-
   return (
-    <div className="flex flex-col h-[100dvh] text-black bg-white">
-      {/* 上部固定：ロゴと哲学セレクターを横に並べる */}
-      <div className="fixed top-0 left-0 right-0 bg-white z-10 p-6">
-        <div className="max-w-2xl mx-auto relative flex items-center justify-between">
-          <button
-            onClick={() => router.push("/settings")}
-            className="absolute top-4 left-0 text-gray-600 hover:text-gray-800"
-            aria-label="Go to Settings"
-          >
-            <FaBars size={24} />
-          </button>
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => router.push("/settings")}
+          className="text-gray-600 hover:text-gray-800"
+          aria-label="Go to Settings"
+        >
+          <FaBars size={24} />
+        </button>
 
-          <button
-            onClick={() => router.push("/todo")}
-            className="absolute top-4 right-0 text-gray-600 hover:text-gray-800"
-            aria-label="Go to Todo"
-          >
-            <FaCalendarAlt size={24} />
-          </button>
-
-          <div className="flex items-center justify-center w-full space-x-4">
+        <div className="flex items-center space-x-2">
+          <div className="flex-shrink-0">
             <Image
               src="/nbrcd_logo.png"
-              alt="nbrcd Logo"
-              width={48}
-              height={48}
+              alt="NBRCD Logo"
+              width={40}
+              height={40}
+              priority
             />
-            <div className="w-1/3">
-              <select
-                value={selectedPhilosopherId}
-                onChange={(e) => setSelectedPhilosopherId(e.target.value)}
-                className="border p-2 w-full"
-                disabled={sessionStarted}
-              >
-                {philosophers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
-        </div>
-      </div>
-
-      {/* スクロールエリア：今日の問いとチャット部分 */}
-      <div className="flex-1 overflow-y-auto mt-32 mb-20 max-w-2xl mx-auto w-full px-6">
-        {dailyQuestion && !sessionStarted && (
-          <div className="mb-6 p-4 bg-gray-100 rounded-lg">
-            <h2 className="text-xl font-bold mb-2">{dailyQuestion.title}</h2>
-            <p className="mb-2 whitespace-pre-line">{dailyQuestion.intro}</p>
-            <p className="font-semibold">{dailyQuestion.callToAction}</p>
-          </div>
-        )}
-
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        {loading && <div className="text-gray-500 mb-4">処理中...</div>}
-
-        <div ref={chatContainer} className="flex-1 border p-4 rounded bg-gray-50">
-          {messages
-            .filter((m) => m.role !== "system")
-            .map((msg, idx) => (
-              <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
-                {msg.role === "user" ? (
-                  <span className="inline-block px-3 py-2 rounded-lg bg-gray-200 text-black text-base">
-                    {msg.content}
-                  </span>
-                ) : (
-                  <span className="text-black whitespace-pre-line">
-                    {msg.content}
-                  </span>
-                )}
-              </div>
-            ))}
-        </div>
-
-        {parsedResult && (
-          <div className="mb-6">
-            <h2 className="text-xl font-bold mb-2">アクションプラン</h2>
-            <h3 className="font-semibold mb-1">アクションを選択:</h3>
-            <ul className="space-y-2 mb-4">
-              {parsedResult.actions.map((action, idx) => (
-                <li key={idx}>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      onChange={() => {
-                        handleActionSelect(action);
-                      }}
-                      className="mr-2 h-5 w-5"
-                    />
-                    <span>{action}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* 下部固定：入力エリア */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white z-10 p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex space-x-2">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder="ここに答えや考えを書いてください..."
-              className="border p-2 flex-1 rounded text-base"
-              disabled={loading}
-            />
-            <button
-              onClick={sessionStarted ? handleSendDuringSession : handleStartSession}
-              disabled={loading}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+          <div className="w-48">
+            <select
+              id="philosopher"
+              value={selectedPhilosopherId}
+              onChange={handlePhilosopherChange}
+              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
             >
-              {sessionStarted ? "送信" : "セッション開始"}
-            </button>
+              <option value="">哲学者を選択してください</option>
+              {philosophers.map((philosopher) => (
+                <option key={philosopher.id} value={philosopher.id}>
+                  {philosopher.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
+
+        <button
+          onClick={() => router.push("/todo/list")}
+          className="text-gray-600 hover:text-gray-800"
+          aria-label="Go to Todo List"
+        >
+          <FaCheck size={24} />
+        </button>
       </div>
+
+      {!selectedPhilosopherId && (
+        <div className="mb-4 p-4 bg-gray-100 rounded text-center">
+          <h2 className="text-lg font-semibold">
+            こんにちは、{currentUser || "ゲスト"}さん
+          </h2>
+        </div>
+      )}
+
+      {selectedPhilosopherId && dailyQuestion && (
+        <div className="mb-4 p-4 bg-gray-100 rounded">
+          <h2 className="text-lg font-semibold">{dailyQuestion.question}</h2>
+          <p className="mt-2 text-sm text-gray-600">{dailyQuestion.learning}</p>
+        </div>
+      )}
+
+      {error && <div className="text-red-500 mb-4">{error}</div>}
+
+      {selectedPhilosopherId && dailyQuestion && (
+        <>
+          <div className="flex-1 overflow-y-auto mb-16"> {/* mb-16 で入力エリア分のスペースを確保 */}
+            {messages
+              .filter((m) => m.role !== "system")
+              .map((message, index) => (
+                <div
+                  key={index}
+                  className={`mb-4 ${message.role === "user" ? "text-right" : "text-left"}`}
+                >
+                  <div
+                    className={`inline-block p-2 rounded-lg ${
+                      message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-black"
+                    }`}
+                  >
+                    {message.content}
+                  </div>
+                </div>
+              ))}
+            {parsedResult && parsedResult.actions.length > 0 && dailyQuestion && (
+              <div className="mt-4 p-4 bg-gray-100 rounded">
+                <p className="font-semibold">アクションを一つ選んでください</p>
+                <div className="mt-2">
+                  {parsedResult.actions.map((action, index) => (
+                    <div key={index} className="flex items-center">
+                      <input
+                        type="radio"
+                        name="action"
+                        value={action}
+                        checked={selectedAction === action}
+                        onChange={() => handleActionSelect(action)}
+                        className="mr-2"
+                      />
+                      <span>{action}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 font-semibold">教訓： {dailyQuestion.quote}</p>
+                <p className="mt-2 font-semibold">関連書籍紹介</p>
+                <p>{dailyQuestion.book} - {dailyQuestion.chapter}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 max-w-2xl mx-auto">
+            <form onSubmit={handleSubmit} className="flex items-center">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={sessionStarted ? "メッセージを入力..." : "セッションを開始するには入力してください"}
+                className="flex-1 border p-2 rounded-l-md"
+                ref={inputRef}
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-md"
+                disabled={loading}
+              >
+                {loading ? "送信中..." : sessionStarted ? "送信" : "開始"}
+              </button>
+            </form>
+          </div>
+        </>
+      )}
     </div>
   );
 }
