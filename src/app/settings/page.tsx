@@ -81,6 +81,9 @@ const UsageStats = () => {
         return;
       }
 
+      // ログを時間順にソート
+      logs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
       const sessions: { [key: string]: ActionLog[] } = {};
       logs.forEach((log) => {
         if (!sessions[log.sessionId]) {
@@ -91,16 +94,18 @@ const UsageStats = () => {
 
       const sessionDurations: number[] = [];
       const sessionDetails: { sessionId: string; duration: number; startTime: string }[] = [];
-      Object.values(sessions).forEach((sessionLogs) => {
+      Object.keys(sessions).forEach((sessionId) => {
+        const sessionLogs = sessions[sessionId];
         const startLog = sessionLogs.find((log) => log.action === "start_session");
-        const endLog = sessionLogs
-          .filter((log) => log.action !== "start_session")
-          .reduce((latest: ActionLog | null, log: ActionLog) => {
-            if (!latest || new Date(log.timestamp) > new Date(latest.timestamp)) {
-              return log;
-            }
-            return latest;
-          }, null);
+        const endLog = sessionLogs.find((log) => log.action === "end_session") ||
+                       sessionLogs
+                         .filter((log) => log.action !== "start_session")
+                         .reduce((latest: ActionLog | null, log: ActionLog) => {
+                           if (!latest || new Date(log.timestamp) > new Date(latest.timestamp)) {
+                             return log;
+                           }
+                           return latest;
+                         }, null);
 
         if (startLog && endLog) {
           const startTime = new Date(startLog.timestamp).getTime();
@@ -113,9 +118,15 @@ const UsageStats = () => {
               duration,
               startTime: new Date(startLog.timestamp).toLocaleString(),
             });
+          } else {
+            console.log(`Invalid duration for session ${sessionId}: start=${startLog.timestamp}, end=${endLog.timestamp}`);
           }
+        } else {
+          console.log(`Session ${sessionId} is incomplete: startLog=${!!startLog}, endLog=${!!endLog}`);
         }
       });
+
+      sessionDetails.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
       const averageDuration =
         sessionDurations.length > 0
