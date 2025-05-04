@@ -32,58 +32,28 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // ローディング状態
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // セッション記録用のユーティリティ
-  useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) return;
-
-    const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setSessionId(newSessionId);
-    localStorage.setItem("sessionId", newSessionId);
-
-    // philosopherId が設定されている場合のみセッション開始ログを記録
-    if (selectedPhilosopherId) {
-      console.log("Recording start_session with philosopherId:", selectedPhilosopherId);
-      fetch("/api/logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          sessionId: newSessionId,
-          action: "start_session",
-          timestamp: new Date().toISOString(),
-          philosopherId: selectedPhilosopherId,
-          category: dailyQuestion?.category,
-        }),
-      });
-    } else {
-      console.warn("Skipping start_session log: philosopherId is not set.");
+  // ローカルストレージから最後の質問IDを読み込む
+  const loadLastQuestionId = (philosophy: string): number => {
+    const stored = localStorage.getItem("lastQuestionIds");
+    if (stored) {
+      const lastQuestionIds = JSON.parse(stored);
+      return lastQuestionIds[philosophy] || -1; // 初期値として -1 を使用
     }
+    return -1;
+  };
 
-    // コンポーネントのアンマウント時にセッション終了ログを記録
-    return () => {
-      if (selectedPhilosopherId) {
-        console.log("Recording end_session with philosopherId:", selectedPhilosopherId);
-        fetch("/api/logs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            sessionId: newSessionId,
-            action: "end_session",
-            timestamp: new Date().toISOString(),
-            philosopherId: selectedPhilosopherId,
-            category: dailyQuestion?.category,
-          }),
-        });
-      } else {
-        console.warn("Skipping end_session log: philosopherId is not set.");
-      }
-    };
-  }, [selectedPhilosopherId, dailyQuestion]); // selectedPhilosopherId と dailyQuestion を依存配列に追加
+  // ローカルストレージに最後の質問IDを保存
+  const saveLastQuestionId = (philosophy: string, lastId: number) => {
+    const stored = localStorage.getItem("lastQuestionIds");
+    const lastQuestionIds = stored ? JSON.parse(stored) : {};
+    lastQuestionIds[philosophy] = lastId;
+    localStorage.setItem("lastQuestionIds", JSON.stringify(lastQuestionIds));
+  };
 
+  // ユーザー情報をロード
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
@@ -95,20 +65,72 @@ export default function Home() {
         .catch((err) => {
           console.error("Failed to fetch user:", err);
           setCurrentUser("ゲスト");
+        })
+        .finally(() => {
+          setIsLoading(false);
         });
     } else {
       setCurrentUser("ゲスト");
+      setIsLoading(false);
     }
   }, []);
 
+  // セッション記録用のユーティリティ
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (!userId || !selectedPhilosopherId) return; // philosopherId が未設定の場合は記録しない
+
+    const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSessionId(newSessionId);
+    localStorage.setItem("sessionId", newSessionId);
+
+    console.log("Recording start_session with philosopherId:", selectedPhilosopherId);
+    fetch("/api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        sessionId: newSessionId,
+        action: "start_session",
+        timestamp: new Date().toISOString(),
+        philosopherId: selectedPhilosopherId,
+        category: dailyQuestion?.category,
+      }),
+    });
+
+    return () => {
+      console.log("Recording end_session with philosopherId:", selectedPhilosopherId);
+      fetch("/api/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          sessionId: newSessionId,
+          action: "end_session",
+          timestamp: new Date().toISOString(),
+          philosopherId: selectedPhilosopherId,
+          category: dailyQuestion?.category,
+        }),
+      });
+    };
+  }, [selectedPhilosopherId, dailyQuestion]);
+
+  // 質問を選択
   useEffect(() => {
     if (selectedPhilosopherId) {
-      const philosopherQuestions = questions.filter(
-        (q) => q.philosophy === selectedPhilosopherId
-      );
-      setDailyQuestion(
-        philosopherQuestions[Math.floor(Math.random() * philosopherQuestions.length)]
-      );
+      const philosopherQuestions = questions
+        .filter((q) => q.philosophy === selectedPhilosopherId)
+        .sort((a, b) => a.id - b.id);
+
+      const lastId = loadLastQuestionId(selectedPhilosopherId);
+      let nextQuestion = philosopherQuestions.find((q) => q.id > lastId);
+
+      if (!nextQuestion) {
+        // lastId より大きい ID がない場合、最初の質問に戻る
+        nextQuestion = philosopherQuestions[0];
+      }
+
+      setDailyQuestion(nextQuestion);
       setMessages([]);
       setSessionStarted(false);
       setParsedResult(null);
@@ -186,6 +208,11 @@ export default function Home() {
 
     saveLog("end_session", { action: "Session ended after action plan selection" });
 
+    // セッション完了後に最後の質問IDを更新
+    if (selectedPhilosopherId && dailyQuestion) {
+      saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
+    }
+
     router.push("/todo/list");
   };
 
@@ -234,10 +261,11 @@ export default function Home() {
 
 4. **アクションプランの提示**：
    - ユーザーの入力が3回目（このメッセージが3回目の応答）の場合、最後に「まとめ」と「アクションプラン」を提示してください。
-   - まとめ：これまでの対話を簡潔に振り返り、学びや気づきを強調してください（1～2文）。
+   - まとめ：これまでの対話を簡潔に振り返り、学びや気づきを強調してください（1～2文）。「まとめ：」の前に改行を2回（\n\n）入れてください。
    - アクションプラン：ユーザーの成長に直結する3つの具体的な行動を提案してください。形式は厳密に以下の通りでなければなりません：
      - 1. [行動1], 2. [行動2], 3. [行動3]
    - 例：
+     ここまでの対話で、時間管理の課題が見えてきましたね。\n\n
      まとめ：これまでの対話を通じて、時間管理の重要性について深く考えることができました。
      1. [毎朝5分間の瞑想を行う], 2. [週末に1時間読書する], 3. [1日1回感謝の気持ちを伝える]
 
@@ -350,11 +378,19 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      // アクションプラン部分をパースする前に、アクションプラン部分を除いた応答を表示
+      // アクションプラン部分をパースし、メッセージから削除
       const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
       if (actionPlanMatch) {
+        // アクションプラン部分を削除
         reply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
+        // まとめ：の前に改行を強制的に挿入
+        if (reply.includes("まとめ：")) {
+          const parts = reply.split("まとめ：");
+          reply = `${parts[0].trim()}\n\nまとめ：${parts[1]?.trim() || ""}`;
+        }
       }
+
+      console.log("Processed reply:", reply);
 
       const newAssistantMessage: Message = {
         role: "assistant",
@@ -444,7 +480,7 @@ ${input.trim()}
       {!selectedPhilosopherId && (
         <div className="mb-4 p-4 bg-gray-100 rounded text-center">
           <h2 className="text-lg font-semibold">
-            こんにちは、{currentUser || "ゲスト"}さん
+            {isLoading ? "読み込み中..." : `こんにちは、${currentUser || "ゲスト"}さん`}
           </h2>
         </div>
       )}
@@ -471,6 +507,7 @@ ${input.trim()}
                     className={`inline-block p-2 rounded-lg ${
                       message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-black"
                     }`}
+                    style={{ whiteSpace: "pre-line" }} // 改行を反映
                   >
                     {message.content}
                   </div>

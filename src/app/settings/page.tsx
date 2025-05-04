@@ -96,9 +96,7 @@ const UsageStats = () => {
       const sessionDetails: { sessionId: string; duration: number; startTime: string }[] = [];
       Object.keys(sessions).forEach((sessionId) => {
         const sessionLogs = sessions[sessionId];
-        // セッションの開始ログを検索
         const startLog = sessionLogs.find((log) => log.action === "start_session");
-        // セッションの終了ログを検索（end_session または最後のアクション）
         const endLog =
           sessionLogs.find((log) => log.action === "end_session") ||
           sessionLogs
@@ -117,6 +115,12 @@ const UsageStats = () => {
 
         console.log("Duration calculation:", { sessionId, startTime: startLog.timestamp, endTime: endLog.timestamp, duration });
 
+        // 1秒未満のセッションは除外
+        if (duration < 1) {
+          console.warn(`Session ${sessionId} skipped: duration (${duration} seconds) is too short.`);
+          return;
+        }
+
         if (duration >= 0) {
           sessionDurations.push(duration);
           sessionDetails.push({
@@ -129,7 +133,6 @@ const UsageStats = () => {
         }
       });
 
-      // セッション詳細を時間順にソート（降順：最新のセッションが上）
       sessionDetails.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
       const averageDuration =
@@ -242,31 +245,36 @@ export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActionLog[]>([]);
   const [weeklySummary, setWeeklySummary] = useState<ActivitySummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // ローディング状態を追加
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
-      fetch(`/api/users/me?userId=${userId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setCurrentUser(data.username);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch user:", err);
-          setCurrentUser("ゲスト");
-        });
-
-      fetch(`/api/logs?userId=${userId}`)
-        .then((res) => res.json())
-        .then((logs) => {
-          setActivityLogs(logs);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch activity logs:", err);
-          setError("アクティビティログの取得に失敗しました");
-        });
+      Promise.all([
+        fetch(`/api/users/me?userId=${userId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            setCurrentUser(data.username);
+          })
+          .catch((err) => {
+            console.error("Failed to fetch user:", err);
+            setCurrentUser("ゲスト");
+          }),
+        fetch(`/api/logs?userId=${userId}`)
+          .then((res) => res.json())
+          .then((logs) => {
+            setActivityLogs(logs);
+          })
+          .catch((err) => {
+            console.error("Failed to fetch activity logs:", err);
+            setError("アクティビティログの取得に失敗しました");
+          }),
+      ]).finally(() => {
+        setIsLoading(false); // ローディング完了
+      });
     } else {
       setCurrentUser("ゲスト");
+      setIsLoading(false);
     }
   }, []);
 
@@ -438,10 +446,14 @@ ${JSON.stringify(completedTodos, null, 2)}
 
       <div className="mb-6 p-4 border rounded bg-gray-100">
         <h2 className="text-xl font-bold mb-2">ユーザー登録</h2>
-        {currentUser && (
-          <p className="mb-2">
-            現在のユーザー: <span className="font-semibold">{currentUser}</span>
-          </p>
+        {isLoading ? (
+          <p className="mb-2">読み込み中...</p>
+        ) : (
+          currentUser && (
+            <p className="mb-2">
+              現在のユーザー: <span className="font-semibold">{currentUser}</span>
+            </p>
+          )
         )}
         {error && <div className="text-red-500 mb-4">{error}</div>}
         {success && <div className="text-green-500 mb-4">{success}</div>}
