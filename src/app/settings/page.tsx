@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ActionLog } from "@/types/actionLog";
-import { FaCheck } from "react-icons/fa";
+// import { FaCheck } from "react-icons/fa";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -415,7 +415,7 @@ ${JSON.stringify(completedTodos, null, 2)}
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
       <button
         onClick={() => router.push("/")}
-        className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
+        className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
         aria-label="Go to Home"
       >
         <svg
@@ -434,13 +434,13 @@ ${JSON.stringify(completedTodos, null, 2)}
         </svg>
       </button>
 
-      <button
+      {/* <button
         onClick={() => router.push("/todo/list")}
         className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
         aria-label="Go to Todo List"
       >
         <FaCheck size={24} />
-      </button>
+      </button> */}
 
       <h1 className="text-2xl font-bold mb-4 text-center">設定</h1>
 

@@ -2,30 +2,45 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaBars } from "react-icons/fa";
 
 interface Todo {
   id: number;
   text: string;
   completed: boolean;
   date: string;
-  dueDate?: string; // 期限を追加
+  dueDate?: string;
   completedDate?: string;
 }
 
 export default function TodoListPage() {
   const router = useRouter();
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [newTask, setNewTask] = useState<string>(""); // 新しいタスクの入力用
-  const [swipeStates, setSwipeStates] = useState<{ [key: number]: number }>({}); // 各todoのスワイプ位置を追跡
-  const [touchStart, setTouchStart] = useState<{ [key: number]: number }>({}); // タッチ開始位置を追跡
-  const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null); // 期限設定用の選択されたタスク
-  const [dueDate, setDueDate] = useState<string>(""); // 期限入力用
+  const [newTask, setNewTask] = useState<string>("");
+  const [swipeStates, setSwipeStates] = useState<{ [key: number]: number }>({});
+  const [touchStart, setTouchStart] = useState<{ [key: number]: number }>({});
+  const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
+  const [dueDate, setDueDate] = useState<string>("");
+  const [completedTodos, setCompletedTodos] = useState<number[]>([]);
+  const [deletedTodos, setDeletedTodos] = useState<number[]>([]); // 削除アニメーション用
 
   useEffect(() => {
     const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     setTodos(storedTodos.filter((todo: Todo) => !todo.completed));
   }, []);
+
+  // todos が変更されたときに swipeStates をクリーンアップ
+  useEffect(() => {
+    setSwipeStates((prev) => {
+      const newState = { ...prev };
+      // 存在しない todo の swipeStates を削除
+      Object.keys(newState).forEach((id) => {
+        if (!todos.some((todo) => todo.id === Number(id))) {
+          delete newState[Number(id)];
+        }
+      });
+      return newState;
+    });
+  }, [todos]);
 
   const handleAddTask = () => {
     if (newTask.trim() === "") return;
@@ -43,6 +58,8 @@ export default function TodoListPage() {
   };
 
   const handleToggle = (id: number) => {
+    setCompletedTodos((prev) => [...prev, id]);
+
     const updatedTodos = todos.map((todo) =>
       todo.id === id
         ? { ...todo, completed: true, completedDate: new Date().toISOString() }
@@ -55,15 +72,28 @@ export default function TodoListPage() {
         : todo
     );
     localStorage.setItem("todos", JSON.stringify(newAllTodos));
-    setTodos(updatedTodos.filter((todo) => !todo.completed));
+
+    setTimeout(() => {
+      setTodos(updatedTodos.filter((todo) => !todo.completed));
+      setCompletedTodos((prev) => prev.filter((todoId) => todoId !== id));
+    }, 300);
   };
 
   const handleDelete = (id: number) => {
+    // 削除アニメーション用にマーク
+    setDeletedTodos((prev) => [...prev, id]);
+
+    // ローカルストレージと状態を更新
     const updatedTodos = todos.filter((todo) => todo.id !== id);
     const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     const newAllTodos = allTodos.filter((todo: Todo) => todo.id !== id);
     localStorage.setItem("todos", JSON.stringify(newAllTodos));
-    setTodos(updatedTodos);
+
+    // アニメーション後に状態をクリア
+    setTimeout(() => {
+      setTodos(updatedTodos);
+      setDeletedTodos((prev) => prev.filter((todoId) => todoId !== id));
+    }, 300); // アニメーション時間（0.3秒）と一致させる
   };
 
   const handleTouchStart = (id: number, e: React.TouchEvent<HTMLDivElement>) => {
@@ -75,7 +105,7 @@ export default function TodoListPage() {
     const touch = e.touches[0];
     const startX = touchStart[id] || 0;
     const offset = touch.clientX - startX;
-    if (offset <= 0 && offset >= -80) {
+    if (offset >= -80 && offset <= 0) {
       setSwipeStates((prev) => ({ ...prev, [id]: offset }));
     }
   };
@@ -83,9 +113,11 @@ export default function TodoListPage() {
   const handleTouchEnd = (id: number) => {
     const offset = swipeStates[id] || 0;
     if (offset < -50) {
-      setSwipeStates((prev) => ({ ...prev, [id]: -80 })); // 削除ボタンを表示するために-80pxで固定
+      setSwipeStates((prev) => ({ ...prev, [id]: -80 }));
+    } else if (offset > -30) {
+      setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     } else {
-      setSwipeStates((prev) => ({ ...prev, [id]: 0 })); // 位置をリセット
+      setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     }
   };
 
@@ -110,7 +142,6 @@ export default function TodoListPage() {
     setDueDate("");
   };
 
-  // タスクを日付でグループ化（期限がなければ登録日を使用）
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
     const date = todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : new Date(todo.date).toLocaleDateString();
     if (!acc[date]) acc[date] = [];
@@ -122,11 +153,11 @@ export default function TodoListPage() {
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => router.push("/settings")}
-          className="text-gray-600 hover:text-gray-800"
-          aria-label="設定ページへ移動"
+          onClick={() => router.push("/")}
+          className="text-gray-600 hover:text-gray-800 text-2xl"
+          aria-label="ホームへ移動"
         >
-          <FaBars size={24} />
+          ＜
         </button>
 
         <h1 className="text-2xl font-bold">計画</h1>
@@ -160,10 +191,19 @@ export default function TodoListPage() {
               <ul className="space-y-2">
                 {groupedTodos[date].map((todo) => (
                   <li key={todo.id} className="relative">
-                    <div className="flex items-center justify-between p-2 border rounded bg-gray-100 overflow-hidden">
+                    <div
+                      className="flex items-center justify-between p-2 border rounded bg-gray-100 overflow-hidden"
+                      style={{
+                        transform: completedTodos.includes(todo.id)
+                          ? "translateX(100%)"
+                          : deletedTodos.includes(todo.id)
+                          ? "translateX(-100%)" // 削除時に左にスライド
+                          : `translateX(${swipeStates[todo.id] || 0}px)`,
+                        transition: "transform 0.3s ease",
+                      }}
+                    >
                       <div
                         className="flex items-center w-full"
-                        style={{ transform: `translateX(${swipeStates[todo.id] || 0}px)`, transition: "transform 0.3s ease" }}
                         onTouchStart={(e) => handleTouchStart(todo.id, e)}
                         onTouchMove={(e) => handleTouchMove(todo.id, e)}
                         onTouchEnd={() => handleTouchEnd(todo.id)}
@@ -173,7 +213,10 @@ export default function TodoListPage() {
                           onChange={() => handleToggle(todo.id)}
                           className="mr-2"
                         />
-                        <span onClick={() => openDueDateModal(todo.id)} className="cursor-pointer">
+                        <span
+                          onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
+                          className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
+                        >
                           {todo.text}
                         </span>
                       </div>
