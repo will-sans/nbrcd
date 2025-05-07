@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { FaTrophy } from "react-icons/fa";
 
 interface Todo {
   id: number;
@@ -15,20 +16,25 @@ interface GroupedTodos {
   [date: string]: Todo[];
 }
 
+interface PointLog {
+  action: string;
+  points: number;
+  timestamp: string;
+}
+
 export default function CompletedTodoPage() {
   const router = useRouter();
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([]);
   const [groupedTodos, setGroupedTodos] = useState<GroupedTodos>({});
   const [swipeStates, setSwipeStates] = useState<{ [key: number]: number }>({});
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [exitingTodos, setExitingTodos] = useState<Map<number, "restore" | "delete">>(new Map()); // アニメーション中のToDo IDとアクションを管理
+  const [exitingTodos, setExitingTodos] = useState<Map<number, "restore" | "delete">>(new Map());
 
   useEffect(() => {
     const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     const completed = storedTodos.filter((todo: Todo) => todo.completed);
     setCompletedTodos(completed);
 
-    // 日付ごとにToDoをグループ化
     const grouped = completed.reduce((acc: GroupedTodos, todo: Todo) => {
       const completedDate = todo.completedDate
         ? new Date(todo.completedDate).toLocaleDateString("ja-JP", {
@@ -46,12 +52,23 @@ export default function CompletedTodoPage() {
     setGroupedTodos(grouped);
   }, []);
 
+  const savePoints = (action: string, points: number) => {
+    const pointLog: PointLog = {
+      action,
+      points,
+      timestamp: new Date().toISOString(),
+    };
+    const existingPoints = JSON.parse(localStorage.getItem("pointLogs") || "[]");
+    localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
+  };
+
   const handleRestoreTodo = (id: number) => {
     setExitingTodos((prev) => {
       const newMap = new Map(prev);
       newMap.set(id, "restore");
       return newMap;
     });
+    savePoints("task_restore", 10); // タスク復元時に10ポイント加算
   };
 
   const handleDeleteTodo = (id: number) => {
@@ -75,7 +92,6 @@ export default function CompletedTodoPage() {
       localStorage.setItem("todos", JSON.stringify(newAllTodos));
       setCompletedTodos(updatedCompletedTodos);
 
-      // グループ化されたToDoを更新
       const updatedGrouped = { ...groupedTodos };
       for (const date in updatedGrouped) {
         updatedGrouped[date] = updatedGrouped[date].filter((todo) => todo.id !== id);
@@ -91,7 +107,6 @@ export default function CompletedTodoPage() {
       localStorage.setItem("todos", JSON.stringify(newAllTodos));
       setCompletedTodos(updatedCompletedTodos);
 
-      // グループ化されたToDoを更新
       const updatedGrouped = { ...groupedTodos };
       for (const date in updatedGrouped) {
         updatedGrouped[date] = updatedGrouped[date].filter((todo) => todo.id !== id);
@@ -126,13 +141,10 @@ export default function CompletedTodoPage() {
   const handleTouchEnd = (id: number) => {
     const offset = swipeStates[id] || 0;
     if (offset < -50) {
-      // 左スワイプが十分なら削除ボタンを表示
       setSwipeStates((prev) => ({ ...prev, [id]: -80 }));
     } else if (offset > -30) {
-      // 右スワイプが十分ならリセット
       setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     } else {
-      // 中途半端な位置ならリセット
       setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     }
     setTouchStartX(null);
@@ -149,7 +161,13 @@ export default function CompletedTodoPage() {
           <span className="text-2xl">&lt;</span>
         </button>
         <h1 className="text-2xl font-bold">完了済み</h1>
-        <div className="w-6"></div> {/* 右側のスペースホルダー */}
+        <button
+          onClick={() => router.push("/points")}
+          className="text-gray-600 hover:text-gray-800"
+          aria-label="ポイント履歴を見る"
+        >
+          <FaTrophy size={24} />
+        </button>
       </div>
 
       <div className="mb-4">
