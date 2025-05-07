@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { FaTrophy } from "react-icons/fa";
 
 interface Todo {
   id: number;
@@ -10,6 +11,12 @@ interface Todo {
   date: string;
   dueDate?: string;
   completedDate?: string;
+}
+
+interface PointLog {
+  action: string;
+  points: number;
+  timestamp: string;
 }
 
 export default function TodoListPage() {
@@ -21,18 +28,16 @@ export default function TodoListPage() {
   const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
   const [dueDate, setDueDate] = useState<string>("");
   const [completedTodos, setCompletedTodos] = useState<number[]>([]);
-  const [deletedTodos, setDeletedTodos] = useState<number[]>([]); // 削除アニメーション用
+  const [deletedTodos, setDeletedTodos] = useState<number[]>([]);
 
   useEffect(() => {
     const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     setTodos(storedTodos.filter((todo: Todo) => !todo.completed));
   }, []);
 
-  // todos が変更されたときに swipeStates をクリーンアップ
   useEffect(() => {
     setSwipeStates((prev) => {
       const newState = { ...prev };
-      // 存在しない todo の swipeStates を削除
       Object.keys(newState).forEach((id) => {
         if (!todos.some((todo) => todo.id === Number(id))) {
           delete newState[Number(id)];
@@ -41,6 +46,16 @@ export default function TodoListPage() {
       return newState;
     });
   }, [todos]);
+
+  const savePoints = (action: string, points: number) => {
+    const pointLog: PointLog = {
+      action,
+      points,
+      timestamp: new Date().toISOString(),
+    };
+    const existingPoints = JSON.parse(localStorage.getItem("pointLogs") || "[]");
+    localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
+  };
 
   const handleAddTask = () => {
     if (newTask.trim() === "") return;
@@ -55,6 +70,7 @@ export default function TodoListPage() {
     localStorage.setItem("todos", JSON.stringify([...allTodos, newTodo]));
     setTodos(updatedTodos);
     setNewTask("");
+    savePoints("task_add", 10); // タスク追加時に10ポイント
   };
 
   const handleToggle = (id: number) => {
@@ -77,23 +93,22 @@ export default function TodoListPage() {
       setTodos(updatedTodos.filter((todo) => !todo.completed));
       setCompletedTodos((prev) => prev.filter((todoId) => todoId !== id));
     }, 300);
+
+    savePoints("task_complete", 10); // タスク完了時に10ポイント
   };
 
   const handleDelete = (id: number) => {
-    // 削除アニメーション用にマーク
     setDeletedTodos((prev) => [...prev, id]);
 
-    // ローカルストレージと状態を更新
     const updatedTodos = todos.filter((todo) => todo.id !== id);
     const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     const newAllTodos = allTodos.filter((todo: Todo) => todo.id !== id);
     localStorage.setItem("todos", JSON.stringify(newAllTodos));
 
-    // アニメーション後に状態をクリア
     setTimeout(() => {
       setTodos(updatedTodos);
       setDeletedTodos((prev) => prev.filter((todoId) => todoId !== id));
-    }, 300); // アニメーション時間（0.3秒）と一致させる
+    }, 300);
   };
 
   const handleTouchStart = (id: number, e: React.TouchEvent<HTMLDivElement>) => {
@@ -162,13 +177,22 @@ export default function TodoListPage() {
 
         <h1 className="text-2xl font-bold">計画</h1>
 
-        <button
-          onClick={() => router.push("/todo/completed")}
-          className="text-gray-600 hover:text-gray-800 text-2xl"
-          aria-label="完了済みタスクへ移動"
-        >
-          ☑️
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => router.push("/points")}
+            className="text-gray-600 hover:text-gray-800 text-2xl"
+            aria-label="ポイント履歴を見る"
+          >
+            <FaTrophy size={24} />
+          </button>
+          <button
+            onClick={() => router.push("/todo/completed")}
+            className="text-gray-600 hover:text-gray-800 text-2xl"
+            aria-label="完了済みタスクへ移動"
+          >
+            ☑️
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex items-center justify-center">
@@ -197,7 +221,7 @@ export default function TodoListPage() {
                         transform: completedTodos.includes(todo.id)
                           ? "translateX(100%)"
                           : deletedTodos.includes(todo.id)
-                          ? "translateX(-100%)" // 削除時に左にスライド
+                          ? "translateX(-100%)"
                           : `translateX(${swipeStates[todo.id] || 0}px)`,
                         transition: "transform 0.3s ease",
                       }}

@@ -7,7 +7,7 @@ import { philosophers } from "@/data/philosophers";
 import { questions } from "@/data/questions";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
-import { FaBars, FaCheck } from "react-icons/fa";
+import { FaBars, FaCheck, FaTrophy } from "react-icons/fa";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -16,6 +16,12 @@ interface Message {
 
 interface ParsedSessionResult {
   actions: string[];
+}
+
+interface PointLog {
+  action: string;
+  points: number;
+  timestamp: string;
 }
 
 export default function Home() {
@@ -32,20 +38,18 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string>("");
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // ローディング状態
+  const [isLoading, setIsLoading] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ローカルストレージから最後の質問IDを読み込む
   const loadLastQuestionId = (philosophy: string): number => {
     const stored = localStorage.getItem("lastQuestionIds");
     if (stored) {
       const lastQuestionIds = JSON.parse(stored);
-      return lastQuestionIds[philosophy] || -1; // 初期値として -1 を使用
+      return lastQuestionIds[philosophy] || -1;
     }
     return -1;
   };
 
-  // ローカルストレージに最後の質問IDを保存
   const saveLastQuestionId = (philosophy: string, lastId: number) => {
     const stored = localStorage.getItem("lastQuestionIds");
     const lastQuestionIds = stored ? JSON.parse(stored) : {};
@@ -53,8 +57,52 @@ export default function Home() {
     localStorage.setItem("lastQuestionIds", JSON.stringify(lastQuestionIds));
   };
 
-  // ユーザー情報をロード
+  const savePoints = (action: string, points: number) => {
+    const pointLog: PointLog = {
+      action,
+      points,
+      timestamp: new Date().toISOString(),
+    };
+    const existingPoints = JSON.parse(localStorage.getItem("pointLogs") || "[]");
+    localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
+  };
+
+  const handleLoginPoints = () => {
+    const currentDate = new Date().toDateString();
+    const lastPointAddedDate = localStorage.getItem("lastPointAddedDate");
+
+    // 同じ日付であればポイントを加算しない
+    if (lastPointAddedDate === currentDate) {
+      return;
+    }
+
+    // ポイント加算処理
+    const lastLogin = localStorage.getItem("lastLoginDate");
+    const streakCount = parseInt(localStorage.getItem("loginStreak") || "0");
+
+    let newStreak = 1;
+    if (lastLogin) {
+      const lastDate = new Date(lastLogin);
+      const yesterday = new Date();
+      yesterday.setDate(new Date().getDate() - 1);
+
+      if (lastDate.toDateString() === yesterday.toDateString()) {
+        newStreak = streakCount + 1;
+      }
+    }
+
+    localStorage.setItem("lastLoginDate", currentDate);
+    localStorage.setItem("loginStreak", newStreak.toString());
+    localStorage.setItem("lastPointAddedDate", currentDate); // ポイント加算日を記録
+
+    const basePoints = 30;
+    const bonusPoints = newStreak * 6;
+    savePoints("login", basePoints + bonusPoints);
+  };
+
   useEffect(() => {
+    handleLoginPoints(); // アプリ起動時にポイント加算（1日1回のみ）
+
     const userId = localStorage.getItem("userId");
     if (userId) {
       fetch(`/api/users/me?userId=${userId}`)
@@ -75,10 +123,9 @@ export default function Home() {
     }
   }, []);
 
-  // セッション記録用のユーティリティ
   useEffect(() => {
     const userId = localStorage.getItem("userId");
-    if (!userId || !selectedPhilosopherId) return; // philosopherId が未設定の場合は記録しない
+    if (!userId || !selectedPhilosopherId) return;
 
     const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setSessionId(newSessionId);
@@ -115,7 +162,6 @@ export default function Home() {
     };
   }, [selectedPhilosopherId, dailyQuestion]);
 
-  // 質問を選択
   useEffect(() => {
     if (selectedPhilosopherId) {
       const philosopherQuestions = questions
@@ -126,7 +172,6 @@ export default function Home() {
       let nextQuestion = philosopherQuestions.find((q) => q.id > lastId);
 
       if (!nextQuestion) {
-        // lastId より大きい ID がない場合、最初の質問に戻る
         nextQuestion = philosopherQuestions[0];
       }
 
@@ -188,9 +233,9 @@ export default function Home() {
     const actionsMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
     if (actionsMatch) {
       const actionsText = actionsMatch[0];
-      const actions = actionsText.split(", ").map((action) => {
-        return action.replace(/^\d+\.\s/, "").trim();
-      });
+      const actions = actionsText.split(", ").map((action) =>
+        action.replace(/^\d+\.\s/, "").trim()
+      );
       return { actions };
     }
     return { actions: [] };
@@ -208,7 +253,6 @@ export default function Home() {
 
     saveLog("end_session", { action: "Session ended after action plan selection" });
 
-    // セッション完了後に最後の質問IDを更新
     if (selectedPhilosopherId && dailyQuestion) {
       saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
     }
@@ -218,6 +262,7 @@ export default function Home() {
 
   const handleActionSelect = (action: string) => {
     setSelectedAction(action);
+    savePoints("action_select", 10);
     saveActionToLocalStorageAndRedirect(action);
   };
 
@@ -295,6 +340,7 @@ ${input.trim()}
     setParsedResult(null);
 
     await saveLog("start_session", { input: input.trim() });
+    savePoints("session_start", 10);
 
     try {
       const response = await fetch("/api/chat", {
@@ -355,6 +401,7 @@ ${input.trim()}
     setError(null);
 
     await saveLog("send_message", { input: input.trim() });
+    savePoints("send_message", 10);
 
     try {
       const response = await fetch("/api/chat", {
@@ -378,12 +425,9 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      // アクションプラン部分をパースし、メッセージから削除
       const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
       if (actionPlanMatch) {
-        // アクションプラン部分を削除
         reply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
-        // まとめ：の前に改行を強制的に挿入
         if (reply.includes("まとめ：")) {
           const parts = reply.split("まとめ：");
           reply = `${parts[0].trim()}\n\nまとめ：${parts[1]?.trim() || ""}`;
@@ -399,7 +443,6 @@ ${input.trim()}
 
       setMessages((prev) => [...prev, newAssistantMessage]);
 
-      // アクションプランが含まれている場合、パースして表示
       if (actionPlanMatch) {
         const parsed = parseGptSessionResult(data.choices[0]?.message?.content || "");
         console.log("Parsed actions:", parsed.actions);
@@ -450,7 +493,7 @@ ${input.trim()}
               priority
             />
           </div>
-          <div className="w-48">
+          <div className="w-36">
             <select
               id="philosopher"
               value={selectedPhilosopherId}
@@ -466,6 +509,13 @@ ${input.trim()}
               ))}
             </select>
           </div>
+          <button
+            onClick={() => router.push("/points")}
+            className="text-gray-600 hover:text-gray-800"
+            aria-label="ポイント履歴を見る"
+          >
+            <FaTrophy size={24} />
+          </button>
         </div>
 
         <button
@@ -507,7 +557,7 @@ ${input.trim()}
                     className={`inline-block p-2 rounded-lg ${
                       message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-black"
                     }`}
-                    style={{ whiteSpace: "pre-line" }} // 改行を反映
+                    style={{ whiteSpace: "pre-line" }}
                   >
                     {message.content}
                   </div>
