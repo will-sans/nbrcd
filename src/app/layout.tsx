@@ -6,6 +6,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata = {
   title: "nbrcd",
   description: "A philosophical chat application",
+  icons: {
+    icon: "/nbrcd_logo.png",
+    apple: "/nbrcd_logo.png", // iPhone用アイコン
+  },
 };
 
 export default function RootLayout({
