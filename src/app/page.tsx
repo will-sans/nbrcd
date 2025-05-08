@@ -60,7 +60,7 @@ export default function Home() {
 
   const savePoints = (action: string, points: number) => {
     const pointLog: PointLog = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, // 一意の ID を生成
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       action,
       points,
       timestamp: new Date().toISOString(),
@@ -100,7 +100,6 @@ export default function Home() {
     savePoints("login", basePoints + bonusPoints);
   };
 
-  // 通知機能: 毎日朝7時に通知をスケジュール
   const scheduleDailyNotification = () => {
     const now = new Date();
     const next7AM = new Date();
@@ -128,7 +127,6 @@ export default function Home() {
     }, timeUntil7AM);
   };
 
-  // アクションプランの抽出を共通関数として定義
   const extractActions = (reply: string): { updatedReply: string; actions: string[] } => {
     const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
     let updatedReply = reply;
@@ -156,7 +154,12 @@ export default function Home() {
     const userId = localStorage.getItem("userId");
     if (userId) {
       fetch(`/api/users/me?userId=${userId}`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch user: ${res.statusText}`);
+          }
+          return res.json();
+        })
         .then((data) => {
           setCurrentUser(data.username);
         })
@@ -198,7 +201,10 @@ export default function Home() {
         philosopherId: selectedPhilosopherId,
         category: dailyQuestion?.category,
       }),
-    });
+    })
+      .catch((err) => {
+        console.error("Failed to log start_session:", err);
+      });
 
     return () => {
       console.log("Recording end_session with philosopherId:", selectedPhilosopherId);
@@ -213,7 +219,10 @@ export default function Home() {
           philosopherId: selectedPhilosopherId,
           category: dailyQuestion?.category,
         }),
-      });
+      })
+        .catch((err) => {
+          console.error("Failed to log end_session:", err);
+        });
     };
   }, [selectedPhilosopherId, dailyQuestion?.category]);
 
@@ -576,6 +585,9 @@ ${input.trim()}
           <h2 className="text-lg font-semibold">
             {isLoading ? "読み込み中..." : `こんにちは、${currentUser || "ゲスト"}さん`}
           </h2>
+          <p className="text-gray-500 mt-2">
+            哲学者を選択してセッションを開始してください。
+          </p>
         </div>
       )}
 
@@ -614,6 +626,7 @@ ${input.trim()}
                   {parsedResult.actions.map((action, index) => (
                     <div key={index} className="flex items-center">
                       <input
+                        id={`action-${index}`}
                         type="radio"
                         name="action"
                         value={action}
@@ -621,7 +634,7 @@ ${input.trim()}
                         onChange={() => handleActionSelect(action)}
                         className="mr-2"
                       />
-                      <span>{action}</span>
+                      <label htmlFor={`action-${index}`}>{action}</label>
                     </div>
                   ))}
                 </div>

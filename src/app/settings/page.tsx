@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ActionLog } from "@/types/actionLog";
-// import { FaCheck } from "react-icons/fa";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -61,7 +60,7 @@ const UsageStats = () => {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // タイムアウトを10秒に延長
 
       const response = await fetch(`/api/logs?userId=${userId}`, {
         signal: controller.signal,
@@ -81,7 +80,6 @@ const UsageStats = () => {
         return;
       }
 
-      // ログを時間順にソート
       logs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
       const sessions: { [key: string]: ActionLog[] } = {};
@@ -115,7 +113,6 @@ const UsageStats = () => {
 
         console.log("Duration calculation:", { sessionId, startTime: startLog.timestamp, endTime: endLog.timestamp, duration });
 
-        // 1秒未満のセッションは除外
         if (duration < 1) {
           console.warn(`Session ${sessionId} skipped: duration (${duration} seconds) is too short.`);
           return;
@@ -245,14 +242,19 @@ export default function SettingsPage() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActionLog[]>([]);
   const [weeklySummary, setWeeklySummary] = useState<ActivitySummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // ローディング状態を追加
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
       Promise.all([
         fetch(`/api/users/me?userId=${userId}`)
-          .then((res) => res.json())
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(`Failed to fetch user: ${res.statusText}`);
+            }
+            return res.json();
+          })
           .then((data) => {
             setCurrentUser(data.username);
           })
@@ -261,7 +263,12 @@ export default function SettingsPage() {
             setCurrentUser("ゲスト");
           }),
         fetch(`/api/logs?userId=${userId}`)
-          .then((res) => res.json())
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(`Failed to fetch logs: ${res.statusText}`);
+            }
+            return res.json();
+          })
           .then((logs) => {
             setActivityLogs(logs);
           })
@@ -270,7 +277,7 @@ export default function SettingsPage() {
             setError("アクティビティログの取得に失敗しました");
           }),
       ]).finally(() => {
-        setIsLoading(false); // ローディング完了
+        setIsLoading(false);
       });
     } else {
       setCurrentUser("ゲスト");
@@ -379,7 +386,8 @@ ${JSON.stringify(completedTodos, null, 2)}
     }
   };
 
-  const handleRegister = async () => {
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault(); // フォームのデフォルト動作を防止
     if (!username || username.length < 3) {
       setError("ユーザー名は3文字以上で入力してください");
       return;
@@ -434,14 +442,6 @@ ${JSON.stringify(completedTodos, null, 2)}
         </svg>
       </button>
 
-      {/* <button
-        onClick={() => router.push("/todo/list")}
-        className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
-        aria-label="Go to Todo List"
-      >
-        <FaCheck size={24} />
-      </button> */}
-
       <h1 className="text-2xl font-bold mb-4 text-center">設定</h1>
 
       <div className="mb-6 p-4 border rounded bg-gray-100">
@@ -457,19 +457,22 @@ ${JSON.stringify(completedTodos, null, 2)}
         )}
         {error && <div className="text-red-500 mb-4">{error}</div>}
         {success && <div className="text-green-500 mb-4">{success}</div>}
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="ユーザー名を入力してください"
-          className="border p-2 w-full mb-2"
-        />
-        <button
-          onClick={handleRegister}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          登録
-        </button>
+        <form onSubmit={handleRegister}>
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="ユーザー名を入力してください"
+            className="border p-2 w-full mb-2"
+          />
+          <button
+            type="submit"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+          >
+            登録
+          </button>
+        </form>
       </div>
 
       <UsageStats />
