@@ -60,7 +60,7 @@ const UsageStats = () => {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // タイムアウトを10秒に延長
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const response = await fetch(`/api/logs?userId=${userId}`, {
         signal: controller.signal,
@@ -198,6 +198,7 @@ const UsageStats = () => {
       <button
         onClick={() => setShowStats(!showStats)}
         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mb-4"
+        aria-label={showStats ? "計測時間を非表示にする" : "計測時間を表示する"}
       >
         {showStats ? "計測時間を非表示" : "計測時間を表示"}
       </button>
@@ -247,8 +248,11 @@ export default function SettingsPage() {
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (userId) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       Promise.all([
-        fetch(`/api/users/me?userId=${userId}`)
+        fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
           .then((res) => {
             if (!res.ok) {
               throw new Error(`Failed to fetch user: ${res.statusText}`);
@@ -262,7 +266,7 @@ export default function SettingsPage() {
             console.error("Failed to fetch user:", err);
             setCurrentUser("ゲスト");
           }),
-        fetch(`/api/logs?userId=${userId}`)
+        fetch(`/api/logs?userId=${userId}`, { signal: controller.signal })
           .then((res) => {
             if (!res.ok) {
               throw new Error(`Failed to fetch logs: ${res.statusText}`);
@@ -276,9 +280,11 @@ export default function SettingsPage() {
             console.error("Failed to fetch activity logs:", err);
             setError("アクティビティログの取得に失敗しました");
           }),
-      ]).finally(() => {
-        setIsLoading(false);
-      });
+      ])
+        .finally(() => {
+          clearTimeout(timeoutId);
+          setIsLoading(false);
+        });
     } else {
       setCurrentUser("ゲスト");
       setIsLoading(false);
@@ -351,6 +357,9 @@ ${JSON.stringify(completedTodos, null, 2)}
 `;
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -370,7 +379,10 @@ ${JSON.stringify(completedTodos, null, 2)}
           ],
           temperature: 0.5,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -387,20 +399,26 @@ ${JSON.stringify(completedTodos, null, 2)}
   };
 
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault(); // フォームのデフォルト動作を防止
+    e.preventDefault();
     if (!username || username.length < 3) {
       setError("ユーザー名は3文字以上で入力してください");
       return;
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch("/api/users/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ username }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -424,7 +442,7 @@ ${JSON.stringify(completedTodos, null, 2)}
       <button
         onClick={() => router.push("/")}
         className="absolute top-4 right-4 text-gray-600 hover:text-gray-800"
-        aria-label="Go to Home"
+        aria-label="ホームへ移動"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -469,6 +487,7 @@ ${JSON.stringify(completedTodos, null, 2)}
           <button
             type="submit"
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+            aria-label="ユーザー登録"
           >
             登録
           </button>
@@ -482,6 +501,7 @@ ${JSON.stringify(completedTodos, null, 2)}
         <button
           onClick={generateWeeklySummary}
           className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mb-4"
+          aria-label="週次サマリーレポートを生成"
         >
           サマリーレポートを生成
         </button>

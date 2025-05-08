@@ -26,5 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     console.error("Failed to fetch user:", error);
     res.status(500).json({ error: "ユーザー情報の取得に失敗しました" });
+  } finally {
+    await prisma.$disconnect();
   }
 }

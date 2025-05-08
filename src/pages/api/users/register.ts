@@ -24,5 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     console.error("Failed to register user:", error);
     res.status(500).json({ error: "ユーザー登録に失敗しました" });
+  } finally {
+    await prisma.$disconnect();
   }
 }

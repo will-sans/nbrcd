@@ -153,7 +153,10 @@ export default function Home() {
 
     const userId = localStorage.getItem("userId");
     if (userId) {
-      fetch(`/api/users/me?userId=${userId}`)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
         .then((res) => {
           if (!res.ok) {
             throw new Error(`Failed to fetch user: ${res.statusText}`);
@@ -168,6 +171,7 @@ export default function Home() {
           setCurrentUser("ゲスト");
         })
         .finally(() => {
+          clearTimeout(timeoutId);
           setIsLoading(false);
         });
     } else {
@@ -190,6 +194,9 @@ export default function Home() {
     localStorage.setItem("sessionId", newSessionId);
 
     console.log("Recording start_session with philosopherId:", selectedPhilosopherId);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     fetch("/api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -201,6 +208,7 @@ export default function Home() {
         philosopherId: selectedPhilosopherId,
         category: dailyQuestion?.category,
       }),
+      signal: controller.signal,
     })
       .catch((err) => {
         console.error("Failed to log start_session:", err);
@@ -219,9 +227,13 @@ export default function Home() {
           philosopherId: selectedPhilosopherId,
           category: dailyQuestion?.category,
         }),
+        signal: controller.signal,
       })
         .catch((err) => {
           console.error("Failed to log end_session:", err);
+        })
+        .finally(() => {
+          clearTimeout(timeoutId);
         });
     };
   }, [selectedPhilosopherId, dailyQuestion?.category]);
@@ -263,13 +275,20 @@ export default function Home() {
     };
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch("/api/logs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(log),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to save log");
@@ -287,6 +306,7 @@ export default function Home() {
           analysis: { sessionCount: messages.length },
           score: messages.length * 10,
         }),
+        signal: controller.signal,
       });
     } catch (error) {
       console.error("Failed to save log:", error);
@@ -395,6 +415,9 @@ ${input.trim()}
     savePoints("session_start", 10);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -405,7 +428,10 @@ ${input.trim()}
           messages: updatedMessages,
           temperature: 0.3,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -465,6 +491,9 @@ ${input.trim()}
     savePoints("send_message", 10);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -475,7 +504,10 @@ ${input.trim()}
           messages: systemMessage ? [systemMessage, ...updatedMessages] : updatedMessages,
           temperature: 0.3,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -531,7 +563,7 @@ ${input.trim()}
         <button
           onClick={() => router.push("/settings")}
           className="text-gray-600 hover:text-gray-800"
-          aria-label="Go to Settings"
+          aria-label="設定へ移動"
         >
           <FaBars size={24} />
         </button>
@@ -574,7 +606,7 @@ ${input.trim()}
         <button
           onClick={() => router.push("/todo/list")}
           className="text-gray-600 hover:text-gray-800"
-          aria-label="Go to Todo List"
+          aria-label="タスクリストへ移動"
         >
           <FaCheck size={24} />
         </button>
@@ -662,6 +694,7 @@ ${input.trim()}
                   type="submit"
                   className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-md"
                   disabled={loading}
+                  aria-label={sessionStarted ? "メッセージを送信" : "セッションを開始"}
                 >
                   {loading ? "送信中..." : sessionStarted ? "送信" : "開始"}
                 </button>
