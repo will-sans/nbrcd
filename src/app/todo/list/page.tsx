@@ -57,7 +57,8 @@ export default function TodoListPage() {
     localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
   };
 
-  const handleAddTask = () => {
+  const handleAddTask = (e: React.FormEvent) => {
+    e.preventDefault(); // フォームのデフォルト動作を防止
     if (newTask.trim() === "") return;
     const newTodo: Todo = {
       id: Date.now(),
@@ -196,14 +197,17 @@ export default function TodoListPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-center">
-        <input
-          type="text"
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          onKeyPress={(e) => e.key === "Enter" && handleAddTask()}
-          placeholder="タスクの追加..."
-          className="w-full p-2 border rounded bg-gray-100 text-center"
-        />
+        <form onSubmit={handleAddTask} className="w-full">
+          <input
+            id="new-task"
+            type="text"
+            value={newTask}
+            onChange={(e) => setNewTask(e.target.value)}
+            onKeyPress={(e) => e.key === "Enter" && handleAddTask(e)}
+            placeholder="タスクの追加..."
+            className="w-full p-2 border rounded bg-gray-100 text-center"
+          />
+        </form>
       </div>
 
       {Object.keys(groupedTodos).length > 0 ? (
@@ -268,6 +272,7 @@ export default function TodoListPage() {
           <div className="bg-white p-4 rounded">
             <h3 className="text-lg font-semibold mb-2">期限を設定</h3>
             <input
+              id="due-date"
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}

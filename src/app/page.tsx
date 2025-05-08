@@ -19,6 +19,7 @@ interface ParsedSessionResult {
 }
 
 interface PointLog {
+  id: string;
   action: string;
   points: number;
   timestamp: string;
@@ -59,6 +60,7 @@ export default function Home() {
 
   const savePoints = (action: string, points: number) => {
     const pointLog: PointLog = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, // 一意の ID を生成
       action,
       points,
       timestamp: new Date().toISOString(),
@@ -71,12 +73,10 @@ export default function Home() {
     const currentDate = new Date().toDateString();
     const lastPointAddedDate = localStorage.getItem("lastPointAddedDate");
 
-    // 同じ日付であればポイントを加算しない
     if (lastPointAddedDate === currentDate) {
       return;
     }
 
-    // ポイント加算処理
     const lastLogin = localStorage.getItem("lastLoginDate");
     const streakCount = parseInt(localStorage.getItem("loginStreak") || "0");
 
@@ -93,7 +93,7 @@ export default function Home() {
 
     localStorage.setItem("lastLoginDate", currentDate);
     localStorage.setItem("loginStreak", newStreak.toString());
-    localStorage.setItem("lastPointAddedDate", currentDate); // ポイント加算日を記録
+    localStorage.setItem("lastPointAddedDate", currentDate);
 
     const basePoints = 30;
     const bonusPoints = newStreak * 6;
@@ -113,12 +113,10 @@ export default function Home() {
     const timeUntil7AM = next7AM.getTime() - now.getTime();
 
     setTimeout(() => {
-      // 通知の許可をリクエスト
       if (Notification.permission !== "granted") {
         Notification.requestPermission();
       }
 
-      // シンプルな通知を表示
       if (Notification.permission === "granted") {
         new Notification("nbrcd: セッション開始", {
           body: "セッションを開始しましょう！",
@@ -126,13 +124,34 @@ export default function Home() {
         });
       }
 
-      // 次の通知をスケジュール
       scheduleDailyNotification();
     }, timeUntil7AM);
   };
 
+  // アクションプランの抽出を共通関数として定義
+  const extractActions = (reply: string): { updatedReply: string; actions: string[] } => {
+    const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
+    let updatedReply = reply;
+    let actions: string[] = [];
+
+    if (actionPlanMatch) {
+      updatedReply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
+      if (updatedReply.includes("まとめ：")) {
+        const parts = updatedReply.split("まとめ：");
+        updatedReply = `${parts[0].trim()}\n\nまとめ：${parts[1]?.trim() || ""}`;
+      }
+
+      const actionsText = actionPlanMatch[0];
+      actions = actionsText.split(", ").map((action) =>
+        action.replace(/^\d+\.\s/, "").trim()
+      );
+    }
+
+    return { updatedReply, actions };
+  };
+
   useEffect(() => {
-    handleLoginPoints(); // アプリ起動時にポイント加算（1日1回のみ）
+    handleLoginPoints();
 
     const userId = localStorage.getItem("userId");
     if (userId) {
@@ -153,10 +172,10 @@ export default function Home() {
       setIsLoading(false);
     }
 
-    // 通知スケジュールの初期化
     if (typeof window !== "undefined" && "Notification" in window) {
       scheduleDailyNotification();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -196,7 +215,7 @@ export default function Home() {
         }),
       });
     };
-  }, [selectedPhilosopherId, dailyQuestion]);
+  }, [selectedPhilosopherId, dailyQuestion?.category]);
 
   useEffect(() => {
     if (selectedPhilosopherId) {
@@ -263,18 +282,6 @@ export default function Home() {
     } catch (error) {
       console.error("Failed to save log:", error);
     }
-  };
-
-  const parseGptSessionResult = (reply: string): ParsedSessionResult => {
-    const actionsMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
-    if (actionsMatch) {
-      const actionsText = actionsMatch[0];
-      const actions = actionsText.split(", ").map((action) =>
-        action.replace(/^\d+\.\s/, "").trim()
-      );
-      return { actions };
-    }
-    return { actions: [] };
   };
 
   const saveActionToLocalStorageAndRedirect = (action: string) => {
@@ -397,8 +404,13 @@ ${input.trim()}
       }
 
       const data = await response.json();
-      const reply = data.choices[0]?.message?.content || "";
+      let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
+
+      const { updatedReply, actions } = extractActions(reply);
+      reply = updatedReply;
+
+      console.log("Processed reply:", reply);
 
       const newAssistantMessage: Message = {
         role: "assistant",
@@ -407,6 +419,10 @@ ${input.trim()}
 
       setMessages((prev) => [...prev, newAssistantMessage]);
       setSessionStarted(true);
+
+      if (actions.length > 0) {
+        setParsedResult({ actions });
+      }
     } catch (error) {
       console.error("Error:", error);
       setError(error instanceof Error ? error.message : "エラーが発生しました");
@@ -461,14 +477,8 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
-      if (actionPlanMatch) {
-        reply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
-        if (reply.includes("まとめ：")) {
-          const parts = reply.split("まとめ：");
-          reply = `${parts[0].trim()}\n\nまとめ：${parts[1]?.trim() || ""}`;
-        }
-      }
+      const { updatedReply, actions } = extractActions(reply);
+      reply = updatedReply;
 
       console.log("Processed reply:", reply);
 
@@ -479,10 +489,8 @@ ${input.trim()}
 
       setMessages((prev) => [...prev, newAssistantMessage]);
 
-      if (actionPlanMatch) {
-        const parsed = parseGptSessionResult(data.choices[0]?.message?.content || "");
-        console.log("Parsed actions:", parsed.actions);
-        setParsedResult(parsed);
+      if (actions.length > 0) {
+        setParsedResult({ actions });
       }
     } catch (error) {
       console.error("Error:", error);
@@ -628,6 +636,7 @@ ${input.trim()}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 max-w-2xl mx-auto">
               <form onSubmit={handleSubmit} className="flex items-center">
                 <input
+                  id="chat-input"
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}

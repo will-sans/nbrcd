@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_URL")
+}
+
+model ActionLog {
+  id            Int      @id @default(autoincrement())
+  action        String
+  timestamp     DateTime // String から DateTime に変更
+  sessionId     String
+  philosopherId String
+  category      String? // 追加
+  details       Json?
+  userId        Int // 追加
+  user          User     @relation(fields: [userId], references: [id]) // リレーション追加
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model User {
+  id         Int         @id @default(autoincrement())
+  username   String      @unique
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  sessions   Session[]
+  actionLogs ActionLog[] // リレーション追加
+}
+
+model Session {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id])
+  conversation Json
+  analysis     Json
+  score        Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
