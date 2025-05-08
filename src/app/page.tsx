@@ -100,6 +100,37 @@ export default function Home() {
     savePoints("login", basePoints + bonusPoints);
   };
 
+  // 通知機能: 毎日朝7時に通知をスケジュール
+  const scheduleDailyNotification = () => {
+    const now = new Date();
+    const next7AM = new Date();
+    next7AM.setHours(7, 0, 0, 0);
+
+    if (now.getHours() >= 7) {
+      next7AM.setDate(next7AM.getDate() + 1);
+    }
+
+    const timeUntil7AM = next7AM.getTime() - now.getTime();
+
+    setTimeout(() => {
+      // 通知の許可をリクエスト
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+      }
+
+      // シンプルな通知を表示
+      if (Notification.permission === "granted") {
+        new Notification("nbrcd: セッション開始", {
+          body: "セッションを開始しましょう！",
+          icon: "/nbrcd_logo.png",
+        });
+      }
+
+      // 次の通知をスケジュール
+      scheduleDailyNotification();
+    }, timeUntil7AM);
+  };
+
   useEffect(() => {
     handleLoginPoints(); // アプリ起動時にポイント加算（1日1回のみ）
 
@@ -120,6 +151,11 @@ export default function Home() {
     } else {
       setCurrentUser("ゲスト");
       setIsLoading(false);
+    }
+
+    // 通知スケジュールの初期化
+    if (typeof window !== "undefined" && "Notification" in window) {
+      scheduleDailyNotification();
     }
   }, []);
 
