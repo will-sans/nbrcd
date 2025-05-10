@@ -47,7 +47,7 @@ export default function Home() {
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
-      router.push("/login"); // 未ログイン状態でログイン画面にリダイレクト
+      router.push("/login");
       return;
     }
 
@@ -79,7 +79,7 @@ export default function Home() {
       scheduleDailyNotification();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]);
 
   const loadLastQuestionId = (philosophy: string): number => {
     const stored = localStorage.getItem("lastQuestionIds");
@@ -98,8 +98,13 @@ export default function Home() {
   };
 
   const savePoints = (action: string, points: number) => {
+    const allowedActions = ["login", "action_select", "task_complete"];
+    if (!allowedActions.includes(action)) {
+      return;
+    }
+
     const pointLog: PointLog = {
-      id: uuidv4(), // UUIDを使用して一意なIDを生成
+      id: uuidv4(),
       action,
       points,
       timestamp: new Date().toISOString(),
@@ -189,7 +194,8 @@ export default function Home() {
 
   useEffect(() => {
     handleLoginPoints();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // handleLoginPoints は初回レンダリング時のみ実行されるため、依存配列に含める必要なし
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -228,7 +234,7 @@ export default function Home() {
 
   const saveLog = async (action: string, details?: Record<string, string>) => {
     const userId = localStorage.getItem("userId");
-    if (!userId) return; // ゲストユーザーの場合、ログ登録をスキップ
+    if (!userId) return;
 
     const log: ActionLog = {
       action,
@@ -282,7 +288,7 @@ export default function Home() {
   const saveActionToLocalStorageAndRedirect = (action: string) => {
     const existingTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     const newTodo = {
-      id: uuidv4(), // UUIDを使用して一意なIDを生成
+      id: uuidv4(),
       text: action,
       completed: false,
       date: new Date().toISOString(),
@@ -378,7 +384,6 @@ ${input.trim()}
     setParsedResult(null);
 
     await saveLog("start_session", { input: input.trim() });
-    savePoints("session_start", 10);
 
     try {
       const controller = new AbortController();
@@ -454,7 +459,6 @@ ${input.trim()}
     setError(null);
 
     await saveLog("send_message", { input: input.trim() });
-    savePoints("send_message", 10);
 
     try {
       const controller = new AbortController();

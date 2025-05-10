@@ -15,7 +15,7 @@ interface Todo {
 }
 
 interface PointLog {
-  id: string; // idを必須に変更
+  id: string;
   action: string;
   points: number;
   timestamp: string;
@@ -31,12 +31,11 @@ export default function TodoListPage() {
   const [dueDate, setDueDate] = useState<string>("");
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
-      router.push("/login"); // 未ログイン状態でログイン画面にリダイレクト
+      router.push("/login");
       return;
     }
 
@@ -57,8 +56,13 @@ export default function TodoListPage() {
   }, [todos]);
 
   const savePoints = (action: string, points: number) => {
+    const allowedActions = ["login", "action_select", "task_complete"];
+    if (!allowedActions.includes(action)) {
+      return;
+    }
+
     const pointLog: PointLog = {
-      id: uuidv4(), // UUIDを使用して一意なIDを生成
+      id: uuidv4(),
       action,
       points,
       timestamp: new Date().toISOString(),
@@ -67,8 +71,7 @@ export default function TodoListPage() {
     localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
   };
 
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddTask = () => {
     if (newTask.trim() === "") return;
     const newTodo: Todo = {
       id: uuidv4(),
@@ -81,8 +84,6 @@ export default function TodoListPage() {
     localStorage.setItem("todos", JSON.stringify([...allTodos, newTodo]));
     setTodos(updatedTodos);
     setNewTask("");
-    setError(null);
-    savePoints("task_add", 10);
   };
 
   const handleToggle = (id: string) => {
@@ -167,7 +168,6 @@ export default function TodoListPage() {
     setTodos(updatedTodos);
     setSelectedTodoId(null);
     setDueDate("");
-    setError(null);
   };
 
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
@@ -209,18 +209,15 @@ export default function TodoListPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-center">
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        <form onSubmit={handleAddTask} className="w-full">
-          <input
-            id="new-task"
-            type="text"
-            value={newTask}
-            onChange={(e) => setNewTask(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleAddTask(e)}
-            placeholder="タスクの追加..."
-            className="w-full p-2 border rounded bg-gray-100 text-center"
-          />
-        </form>
+        <input
+          id="new-task"
+          type="text"
+          value={newTask}
+          onChange={(e) => setNewTask(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleAddTask()}
+          placeholder="タスクの追加..."
+          className="w-full p-2 border rounded bg-gray-100 text-center"
+        />
       </div>
 
       {Object.keys(groupedTodos).length > 0 ? (
@@ -250,19 +247,16 @@ export default function TodoListPage() {
                         onTouchEnd={() => handleTouchEnd(todo.id)}
                       >
                         <input
-                          id={`todo-${todo.id}`}
                           type="radio"
                           onChange={() => handleToggle(todo.id)}
                           className="mr-2"
                         />
-                        <label htmlFor={`todo-${todo.id}`} className="flex-1">
-                          <span
-                            onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
-                            className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
-                          >
-                            {todo.text}
-                          </span>
-                        </label>
+                        <span
+                          onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
+                          className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
+                        >
+                          {todo.text}
+                        </span>
                       </div>
                       <div className="absolute right-0 h-full flex items-center">
                         <button
