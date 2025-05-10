@@ -9,7 +9,7 @@ async function deleteTempUsers() {
     const tempUsers = await prisma.user.findMany({
       where: {
         username: {
-          contains: "temp",
+          contains: "WILL",
         },
       },
     });
@@ -51,7 +51,7 @@ async function deleteTempUsers() {
     const deleteResult = await prisma.user.deleteMany({
       where: {
         username: {
-          contains: "temp",
+          contains: "WILL",
         },
       },
     });
@@ -61,7 +61,7 @@ async function deleteTempUsers() {
     const remainingUsers = await prisma.user.findMany({
       where: {
         username: {
-          contains: "temp",
+          contains: "WILL",
         },
       },
     });
