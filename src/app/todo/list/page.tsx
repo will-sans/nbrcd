@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaTrophy } from "react-icons/fa";
+import { v4 as uuidv4 } from "uuid";
 
 interface Todo {
-  id: number;
+  id: string;
   text: string;
   completed: boolean;
   date: string;
@@ -14,6 +15,7 @@ interface Todo {
 }
 
 interface PointLog {
+  id: string; // idを必須に変更
   action: string;
   points: number;
   timestamp: string;
@@ -23,24 +25,31 @@ export default function TodoListPage() {
   const router = useRouter();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTask, setNewTask] = useState<string>("");
-  const [swipeStates, setSwipeStates] = useState<{ [key: number]: number }>({});
-  const [touchStart, setTouchStart] = useState<{ [key: number]: number }>({});
-  const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
+  const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
+  const [touchStart, setTouchStart] = useState<{ [key: string]: number }>({});
+  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string>("");
-  const [completedTodos, setCompletedTodos] = useState<number[]>([]);
-  const [deletedTodos, setDeletedTodos] = useState<number[]>([]);
+  const [completedTodos, setCompletedTodos] = useState<string[]>([]);
+  const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      router.push("/login"); // 未ログイン状態でログイン画面にリダイレクト
+      return;
+    }
+
     const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     setTodos(storedTodos.filter((todo: Todo) => !todo.completed));
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     setSwipeStates((prev) => {
       const newState = { ...prev };
       Object.keys(newState).forEach((id) => {
-        if (!todos.some((todo) => todo.id === Number(id))) {
-          delete newState[Number(id)];
+        if (!todos.some((todo) => todo.id === id)) {
+          delete newState[id];
         }
       });
       return newState;
@@ -49,6 +58,7 @@ export default function TodoListPage() {
 
   const savePoints = (action: string, points: number) => {
     const pointLog: PointLog = {
+      id: uuidv4(), // UUIDを使用して一意なIDを生成
       action,
       points,
       timestamp: new Date().toISOString(),
@@ -58,10 +68,10 @@ export default function TodoListPage() {
   };
 
   const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault(); // フォームのデフォルト動作を防止
+    e.preventDefault();
     if (newTask.trim() === "") return;
     const newTodo: Todo = {
-      id: Date.now(),
+      id: uuidv4(),
       text: newTask,
       completed: false,
       date: new Date().toISOString(),
@@ -71,10 +81,11 @@ export default function TodoListPage() {
     localStorage.setItem("todos", JSON.stringify([...allTodos, newTodo]));
     setTodos(updatedTodos);
     setNewTask("");
-    savePoints("task_add", 10); // タスク追加時に10ポイント
+    setError(null);
+    savePoints("task_add", 10);
   };
 
-  const handleToggle = (id: number) => {
+  const handleToggle = (id: string) => {
     setCompletedTodos((prev) => [...prev, id]);
 
     const updatedTodos = todos.map((todo) =>
@@ -95,10 +106,10 @@ export default function TodoListPage() {
       setCompletedTodos((prev) => prev.filter((todoId) => todoId !== id));
     }, 300);
 
-    savePoints("task_complete", 10); // タスク完了時に10ポイント
+    savePoints("task_complete", 10);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     setDeletedTodos((prev) => [...prev, id]);
 
     const updatedTodos = todos.filter((todo) => todo.id !== id);
@@ -112,12 +123,12 @@ export default function TodoListPage() {
     }, 300);
   };
 
-  const handleTouchStart = (id: number, e: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = (id: string, e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
     setTouchStart((prev) => ({ ...prev, [id]: touch.clientX }));
   };
 
-  const handleTouchMove = (id: number, e: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchMove = (id: string, e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
     const startX = touchStart[id] || 0;
     const offset = touch.clientX - startX;
@@ -126,7 +137,7 @@ export default function TodoListPage() {
     }
   };
 
-  const handleTouchEnd = (id: number) => {
+  const handleTouchEnd = (id: string) => {
     const offset = swipeStates[id] || 0;
     if (offset < -50) {
       setSwipeStates((prev) => ({ ...prev, [id]: -80 }));
@@ -137,7 +148,7 @@ export default function TodoListPage() {
     }
   };
 
-  const openDueDateModal = (id: number) => {
+  const openDueDateModal = (id: string) => {
     setSelectedTodoId(id);
     const todo = todos.find((t) => t.id === id);
     setDueDate(todo?.dueDate || "");
@@ -156,6 +167,7 @@ export default function TodoListPage() {
     setTodos(updatedTodos);
     setSelectedTodoId(null);
     setDueDate("");
+    setError(null);
   };
 
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
@@ -197,6 +209,7 @@ export default function TodoListPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-center">
+        {error && <div className="text-red-500 mb-4">{error}</div>}
         <form onSubmit={handleAddTask} className="w-full">
           <input
             id="new-task"
@@ -237,16 +250,19 @@ export default function TodoListPage() {
                         onTouchEnd={() => handleTouchEnd(todo.id)}
                       >
                         <input
+                          id={`todo-${todo.id}`}
                           type="radio"
                           onChange={() => handleToggle(todo.id)}
                           className="mr-2"
                         />
-                        <span
-                          onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
-                          className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
-                        >
-                          {todo.text}
-                        </span>
+                        <label htmlFor={`todo-${todo.id}`} className="flex-1">
+                          <span
+                            onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
+                            className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
+                          >
+                            {todo.text}
+                          </span>
+                        </label>
                       </div>
                       <div className="absolute right-0 h-full flex items-center">
                         <button
@@ -282,12 +298,14 @@ export default function TodoListPage() {
               <button
                 onClick={() => setSelectedTodoId(null)}
                 className="bg-gray-500 text-white px-4 py-2 rounded"
+                aria-label="期限設定モーダルを閉じる"
               >
                 キャンセル
               </button>
               <button
                 onClick={saveDueDate}
                 className="bg-blue-500 text-white px-4 py-2 rounded"
+                aria-label="期限を保存する"
               >
                 保存
               </button>

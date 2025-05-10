@@ -8,6 +8,7 @@ import { questions } from "@/data/questions";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
 import { FaBars, FaCheck, FaTrophy } from "react-icons/fa";
+import { v4 as uuidv4 } from "uuid";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -40,7 +41,45 @@ export default function Home() {
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      router.push("/login"); // 未ログイン状態でログイン画面にリダイレクト
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to fetch user: ${res.statusText}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setCurrentUser(data.username);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch user:", err);
+        localStorage.removeItem("userId");
+        localStorage.removeItem("currentUser");
+        router.push("/login");
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setIsLoading(false);
+      });
+
+    if (typeof window !== "undefined" && "Notification" in window) {
+      scheduleDailyNotification();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadLastQuestionId = (philosophy: string): number => {
     const stored = localStorage.getItem("lastQuestionIds");
@@ -60,7 +99,7 @@ export default function Home() {
 
   const savePoints = (action: string, points: number) => {
     const pointLog: PointLog = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: uuidv4(), // UUIDを使用して一意なIDを生成
       action,
       points,
       timestamp: new Date().toISOString(),
@@ -150,39 +189,6 @@ export default function Home() {
 
   useEffect(() => {
     handleLoginPoints();
-
-    const userId = localStorage.getItem("userId");
-    if (userId) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`Failed to fetch user: ${res.statusText}`);
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setCurrentUser(data.username);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch user:", err);
-          setCurrentUser("ゲスト");
-        })
-        .finally(() => {
-          clearTimeout(timeoutId);
-          setIsLoading(false);
-        });
-    } else {
-      setCurrentUser("ゲスト");
-      setIsLoading(false);
-    }
-
-    if (typeof window !== "undefined" && "Notification" in window) {
-      scheduleDailyNotification();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -193,48 +199,8 @@ export default function Home() {
     setSessionId(newSessionId);
     localStorage.setItem("sessionId", newSessionId);
 
-    console.log("Recording start_session with philosopherId:", selectedPhilosopherId);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    fetch("/api/logs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId,
-        sessionId: newSessionId,
-        action: "start_session",
-        timestamp: new Date().toISOString(),
-        philosopherId: selectedPhilosopherId,
-        category: dailyQuestion?.category,
-      }),
-      signal: controller.signal,
-    })
-      .catch((err) => {
-        console.error("Failed to log start_session:", err);
-      });
-
     return () => {
-      console.log("Recording end_session with philosopherId:", selectedPhilosopherId);
-      fetch("/api/logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          sessionId: newSessionId,
-          action: "end_session",
-          timestamp: new Date().toISOString(),
-          philosopherId: selectedPhilosopherId,
-          category: dailyQuestion?.category,
-        }),
-        signal: controller.signal,
-      })
-        .catch((err) => {
-          console.error("Failed to log end_session:", err);
-        })
-        .finally(() => {
-          clearTimeout(timeoutId);
-        });
+      // ログ記録はゲストユーザーでは行わないため、ここでは何もしない
     };
   }, [selectedPhilosopherId, dailyQuestion?.category]);
 
@@ -262,7 +228,7 @@ export default function Home() {
 
   const saveLog = async (action: string, details?: Record<string, string>) => {
     const userId = localStorage.getItem("userId");
-    if (!userId) return;
+    if (!userId) return; // ゲストユーザーの場合、ログ登録をスキップ
 
     const log: ActionLog = {
       action,
@@ -316,7 +282,7 @@ export default function Home() {
   const saveActionToLocalStorageAndRedirect = (action: string) => {
     const existingTodos = JSON.parse(localStorage.getItem("todos") || "[]");
     const newTodo = {
-      id: Date.now() + Math.random(),
+      id: uuidv4(), // UUIDを使用して一意なIDを生成
       text: action,
       completed: false,
       date: new Date().toISOString(),
@@ -615,7 +581,7 @@ ${input.trim()}
       {!selectedPhilosopherId && (
         <div className="mb-4 p-4 bg-gray-100 rounded text-center">
           <h2 className="text-lg font-semibold">
-            {isLoading ? "読み込み中..." : `こんにちは、${currentUser || "ゲスト"}さん`}
+            {isLoading ? "読み込み中..." : `こんにちは、${currentUser}さん`}
           </h2>
           <p className="text-gray-500 mt-2">
             哲学者を選択してセッションを開始してください。

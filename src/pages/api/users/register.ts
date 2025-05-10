@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -15,6 +15,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // 同じusernameが既に存在するか確認
+    const existingUser = await prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ error: "このユーザー名はすでに使用されています" });
+    }
+
     const user = await prisma.user.create({
       data: {
         username,
@@ -23,7 +32,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json(user);
   } catch (error) {
     console.error("Failed to register user:", error);
-    res.status(500).json({ error: "ユーザー登録に失敗しました" });
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        // 一意性制約違反
+        return res.status(409).json({ error: "このユーザー名はすでに使用されています" });
+      }
+    }
+    // errorをError型にキャスト
+    if (error instanceof Error) {
+      res.status(500).json({ error: "ユーザー登録に失敗しました", details: error.message });
+    } else {
+      res.status(500).json({ error: "ユーザー登録に失敗しました", details: "不明なエラーが発生しました" });
+    }
   } finally {
     await prisma.$disconnect();
   }

@@ -15,49 +15,51 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
-    if (userId) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      Promise.all([
-        fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
-          .then((res) => {
-            if (!res.ok) {
-              throw new Error(`Failed to fetch user: ${res.statusText}`);
-            }
-            return res.json();
-          })
-          .then((data) => {
-            setCurrentUser(data.username);
-          })
-          .catch((err) => {
-            console.error("Failed to fetch user:", err);
-            setCurrentUser("ゲスト");
-          }),
-        fetch(`/api/logs?userId=${userId}`, { signal: controller.signal })
-          .then((res) => {
-            if (!res.ok) {
-              throw new Error(`Failed to fetch logs: ${res.statusText}`);
-            }
-            return res.json();
-          })
-          .then((logs) => {
-            setActivityLogs(logs);
-          })
-          .catch((err) => {
-            console.error("Failed to fetch activity logs:", err);
-            setError("アクティビティログの取得に失敗しました");
-          }),
-      ])
-        .finally(() => {
-          clearTimeout(timeoutId);
-          setIsLoading(false);
-        });
-    } else {
-      setCurrentUser("ゲスト");
-      setIsLoading(false);
+    if (!userId) {
+      router.push("/login"); // 未ログイン状態でログイン画面にリダイレクト
+      return;
     }
-  }, []);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    Promise.all([
+      fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch user: ${res.statusText}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setCurrentUser(data.username);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch user:", err);
+          localStorage.removeItem("userId");
+          localStorage.removeItem("currentUser");
+          router.push("/login");
+        }),
+      fetch(`/api/logs?userId=${userId}`, { signal: controller.signal })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch logs: ${res.statusText}`);
+          }
+          return res.json();
+        })
+        .then((logs) => {
+          setActivityLogs(logs);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch activity logs:", err);
+          setError("アクティビティログの取得に失敗しました");
+        }),
+    ])
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setIsLoading(false);
+      });
+  }, [router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +95,55 @@ export default function SettingsPage() {
       setSuccess("ユーザー登録が完了しました！");
       setError(null);
       setUsername("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setSuccess(null);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      setError("ユーザーIDが見つかりません");
+      return;
+    }
+
+    if (!confirm("本当にデータを全て削除しますか？この操作は元に戻せません。")) {
+      return;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(`/api/users/delete?userId=${userId}`, {
+        method: "DELETE",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "ユーザーデータの削除に失敗しました");
+      }
+
+      // ローカルデータのクリア
+      localStorage.removeItem("userId");
+      localStorage.removeItem("currentUser");
+      localStorage.removeItem("todos");
+      localStorage.removeItem("pointLogs");
+      localStorage.removeItem("lastQuestionIds");
+      localStorage.removeItem("lastLoginDate");
+      localStorage.removeItem("loginStreak");
+      localStorage.removeItem("lastPointAddedDate");
+      localStorage.removeItem("sessionId");
+
+      setCurrentUser(null);
+      setActivityLogs([]);
+      setSuccess("ユーザーデータが削除されました");
+      setError(null);
+      router.push("/login");
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
@@ -143,15 +194,22 @@ export default function SettingsPage() {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="ユーザー名を入力してください"
+            placeholder="新しいユーザー名を入力してください"
             className="border p-2 w-full mb-2"
           />
           <button
             type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-            aria-label="ユーザー登録"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mr-2"
+            aria-label="ユーザー名を変更"
           >
-            登録
+            ユーザー名を変更
+          </button>
+          <button
+            onClick={handleDeleteUser}
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+            aria-label="ユーザーデータを削除"
+          >
+            データを全て削除
           </button>
         </form>
       </div>
