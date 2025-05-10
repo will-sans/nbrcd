@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { v4 as uuidv4 } from "uuid";
 
 interface PointLog {
-  id: string;
+  id?: string; // idをオプショナルに変更
   action: string;
   points: number;
   timestamp: string;
@@ -13,6 +14,7 @@ interface PointLog {
 export default function PointsPage() {
   const router = useRouter();
   const [pointLogs, setPointLogs] = useState<PointLog[]>([]);
+  const [totalPoints, setTotalPoints] = useState<number>(0);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -22,8 +24,20 @@ export default function PointsPage() {
     }
 
     const storedPointLogs = JSON.parse(localStorage.getItem("pointLogs") || "[]");
-    console.log("Loaded pointLogs:", storedPointLogs); // ログ出力で確認
-    setPointLogs(storedPointLogs);
+    // idがない要素に一時的なidを付与
+    const updatedPointLogs = storedPointLogs.map((log: PointLog) => {
+      if (!log.id) {
+        return { ...log, id: uuidv4() };
+      }
+      return log;
+    });
+    localStorage.setItem("pointLogs", JSON.stringify(updatedPointLogs));
+    console.log("Loaded pointLogs:", updatedPointLogs); // ログ出力で確認
+    setPointLogs(updatedPointLogs);
+
+    // ポイント合計を計算
+    const total = updatedPointLogs.reduce((sum: number, log: PointLog) => sum + log.points, 0);
+    setTotalPoints(total);
   }, [router]);
 
   return (
@@ -40,6 +54,10 @@ export default function PointsPage() {
         <h1 className="text-2xl font-bold">ポイント履歴</h1>
 
         <div className="w-6" /> {/* レイアウト調整用 */}
+      </div>
+
+      <div className="mb-4 p-4 bg-gray-100 rounded text-center">
+        <h2 className="text-lg font-semibold">合計ポイント: {totalPoints}</h2>
       </div>
 
       {pointLogs.length > 0 ? (
