@@ -3,98 +3,120 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ActionLog } from "@/types/actionLog";
+import { createClient } from '@/utils/supabase/client';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActionLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const supabase = createClient();
+
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      router.push("/login"); // 未ログイン状態でログイン画面にリダイレクト
-      return;
-    }
+    const fetchUserData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(`/api/users/me`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch user: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setCurrentUser(data.username);
+        setCurrentEmail(data.email);
 
-    Promise.all([
-      fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`Failed to fetch user: ${res.statusText}`);
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setCurrentUser(data.username);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch user:", err);
-          localStorage.removeItem("userId");
-          localStorage.removeItem("currentUser");
-          router.push("/login");
-        }),
-      fetch(`/api/logs?userId=${userId}`, { signal: controller.signal })
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`Failed to fetch logs: ${res.statusText}`);
-          }
-          return res.json();
-        })
-        .then((logs) => {
-          setActivityLogs(logs);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch activity logs:", err);
-          setError("アクティビティログの取得に失敗しました");
-        }),
-    ])
-      .finally(() => {
-        clearTimeout(timeoutId);
+        const { data: logs, error: logsError } = await supabase
+          .from('action_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('timestamp', { ascending: false });
+
+        if (logsError) {
+          throw new Error(logsError.message || 'アクティビティログの取得に失敗しました');
+        }
+
+        setActivityLogs(logs || []);
+      } catch (err) {
+        console.error("Failed to fetch user or logs:", err);
+        localStorage.removeItem("userId");
+        localStorage.removeItem("currentUser");
+        router.push("/login");
+      } finally {
         setIsLoading(false);
-      });
-  }, [router]);
+      }
+    };
 
-  const handleRegister = async (e: React.FormEvent) => {
+    fetchUserData();
+  }, [router, supabase]);
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw new Error(error.message || 'ログアウトに失敗しました');
+      }
+      setCurrentUser(null);
+      setCurrentEmail(null);
+      setSuccess("ログアウトしました");
+      setError(null);
+      router.push("/login");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setSuccess(null);
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
     if (!username || username.length < 3) {
       setError("ユーザー名は3文字以上で入力してください");
       return;
     }
+    if (!email) {
+      setError("メールアドレスを入力してください");
+      return;
+    }
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('ユーザーIDが見つかりません');
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch("/api/users/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username }),
-        signal: controller.signal,
+      const { error: authError } = await supabase.auth.updateUser({
+        email,
+        data: { username },
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "ユーザー登録に失敗しました");
+      if (authError) {
+        throw new Error(authError.message || 'ユーザー情報の更新に失敗しました');
       }
 
-      const user = await response.json();
-      localStorage.setItem("userId", user.id.toString());
-      localStorage.setItem("currentUser", user.username);
-      setCurrentUser(user.username);
-      setSuccess("ユーザー登録が完了しました！");
+      setCurrentUser(username);
+      setCurrentEmail(email);
+      setSuccess("ユーザー情報が更新されました！");
       setError(null);
       setUsername("");
+      setEmail("");
+      setPassword("");
+      clearTimeout(timeoutId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
@@ -102,48 +124,38 @@ export default function SettingsPage() {
   };
 
   const handleDeleteUser = async () => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setError("ユーザーIDが見つかりません");
-      return;
-    }
-
-    if (!confirm("本当にデータを全て削除しますか？この操作は元に戻せません。")) {
-      return;
-    }
-
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError("ユーザーIDが見つかりません");
+        return;
+      }
+
+      if (!confirm("本当にデータを全て削除しますか？この操作は元に戻せません。")) {
+        return;
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(`/api/users/delete?userId=${userId}`, {
-        method: "DELETE",
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "ユーザーデータの削除に失敗しました");
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
+      if (authError) {
+        throw new Error(authError.message || 'ユーザーの削除に失敗しました');
       }
 
-      // ローカルデータのクリア
-      localStorage.removeItem("userId");
-      localStorage.removeItem("currentUser");
-      localStorage.removeItem("todos");
-      localStorage.removeItem("pointLogs");
-      localStorage.removeItem("lastQuestionIds");
-      localStorage.removeItem("lastLoginDate");
-      localStorage.removeItem("loginStreak");
-      localStorage.removeItem("lastPointAddedDate");
-      localStorage.removeItem("sessionId");
+      await supabase.from('point_logs').delete().eq('user_id', user.id);
+      await supabase.from('todos').delete().eq('user_id', user.id);
+      await supabase.from('sessions').delete().eq('user_id', user.id);
+      await supabase.from('action_logs').delete().eq('user_id', user.id);
+      await supabase.from('user_settings').delete().eq('user_id', user.id);
 
       setCurrentUser(null);
+      setCurrentEmail(null);
       setActivityLogs([]);
       setSuccess("ユーザーデータが削除されました");
       setError(null);
       router.push("/login");
+      clearTimeout(timeoutId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
@@ -173,43 +185,81 @@ export default function SettingsPage() {
         </svg>
       </button>
 
-      <h1 className="text-2xl font-bold mb-4 text-center">設定</h1>
+      <h1 className="text-2xl font-bold mb-4 text-center">ユーザー情報</h1>
 
       <div className="mb-6 p-4 border rounded bg-gray-100">
-        <h2 className="text-xl font-bold mb-2">ユーザー登録</h2>
+        <h2 className="text-xl font-bold mb-2">ユーザー情報</h2>
         {isLoading ? (
           <p className="mb-2">読み込み中...</p>
         ) : (
           currentUser && (
-            <p className="mb-2">
-              現在のユーザー: <span className="font-semibold">{currentUser}</span>
-            </p>
+            <div className="mb-2">
+              <p><strong>ユーザー名:</strong> {currentUser}</p>
+              <p><strong>メールアドレス:</strong> {currentEmail}</p>
+            </div>
           )
         )}
         {error && <div className="text-red-500 mb-4">{error}</div>}
         {success && <div className="text-green-500 mb-4">{success}</div>}
-        <form onSubmit={handleRegister}>
-          <input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="新しいユーザー名を入力してください"
-            className="border p-2 w-full mb-2"
-          />
+        <form onSubmit={handleUpdateUser}>
+          <div className="mb-2">
+            <label htmlFor="username" className="block mb-1">新しいユーザー名</label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="新しいユーザー名を入力してください"
+              className="border p-2 w-full"
+              minLength={3}
+              autoComplete="username"
+            />
+          </div>
+          <div className="mb-2">
+            <label htmlFor="email" className="block mb-1">新しいメールアドレス</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="新しいメールアドレスを入力してください"
+              className="border p-2 w-full"
+              autoComplete="email"
+            />
+          </div>
+          <div className="mb-2">
+            <label htmlFor="password" className="block mb-1">新しいパスワード</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="新しいパスワードを入力してください（任意）"
+              className="border p-2 w-full"
+              minLength={6}
+              autoComplete="new-password"
+            />
+          </div>
           <button
             type="submit"
             className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mr-2"
-            aria-label="ユーザー名を変更"
+            aria-label="ユーザー情報を更新"
           >
-            ユーザー名を変更
+            情報を更新
+          </button>
+          <button
+            onClick={handleLogout}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded mr-2"
+            aria-label="ログアウト"
+          >
+            ログアウト
           </button>
           <button
             onClick={handleDeleteUser}
             className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
             aria-label="ユーザーデータを削除"
           >
-            データを全て削除
+            アカウントを削除
           </button>
         </form>
       </div>
@@ -220,24 +270,14 @@ export default function SettingsPage() {
           <ul className="space-y-2">
             {activityLogs.map((log, index) => (
               <li key={index} className="border-b pb-2">
-                <p>
-                  <strong>アクション:</strong> {log.action}
-                </p>
-                <p>
-                  <strong>哲学者:</strong> {log.philosopherId}
-                </p>
+                <p><strong>アクション:</strong> {log.action}</p>
+                <p><strong>哲学者:</strong> {log.philosopherId || '未指定'}</p>
                 {log.category && (
-                  <p>
-                    <strong>カテゴリ:</strong> {log.category}
-                  </p>
+                  <p><strong>カテゴリ:</strong> {log.category}</p>
                 )}
-                <p>
-                  <strong>時間:</strong> {new Date(log.timestamp).toLocaleString()}
-                </p>
+                <p><strong>時間:</strong> {new Date(log.timestamp).toLocaleString()}</p>
                 {log.details && (
-                  <p>
-                    <strong>詳細:</strong> {JSON.stringify(log.details)}
-                  </p>
+                  <p><strong>詳細:</strong> {JSON.stringify(log.details)}</p>
                 )}
               </li>
             ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { philosophers } from "@/data/philosophers";
@@ -9,6 +9,7 @@ import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
 import { FaBars, FaCheck, FaTrophy } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
+import { createClient } from '@/utils/supabase/client';
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -17,13 +18,6 @@ interface Message {
 
 interface ParsedSessionResult {
   actions: string[];
-}
-
-interface PointLog {
-  id: string;
-  action: string;
-  points: number;
-  timestamp: string;
 }
 
 export default function Home() {
@@ -43,86 +37,150 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const supabase = createClient();
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      router.push("/login");
+    const checkUser = async (retries = 3, delay = 1000) => {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser();
+          if (error || !user) {
+            throw new Error('認証されていません');
+          }
+
+          const response = await fetch("/api/users/me");
+          if (!response.ok) {
+            throw new Error(`Failed to fetch user: ${response.statusText}`);
+          }
+          const data = await response.json();
+          setCurrentUser(data.username || user.user_metadata.username || user.email);
+          setIsLoading(false);
+          return;
+        } catch (err) {
+          console.error(`Attempt ${attempt} failed:`, err);
+          if (attempt === retries) {
+            console.error("Max retries reached, signing out:", err);
+            await supabase.auth.signOut();
+            router.push("/login");
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        checkUser();
+      } else if (event === 'SIGNED_OUT' || !session) {
+        router.push("/login");
+      }
+    });
+
+    checkUser();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router, supabase.auth]);
+
+  const loadLastQuestionId = useCallback(async (philosophy: string): Promise<number> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return -1;
+
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('last_question_ids')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error || !data) return -1;
+
+    const lastQuestionIds = data.last_question_ids || {};
+    return lastQuestionIds[philosophy] || -1;
+  }, [supabase]);
+
+  const saveLastQuestionId = async (philosophy: string, lastId: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('last_question_ids')
+      .eq('user_id', user.id)
+      .single();
+
+    const lastQuestionIds = data?.last_question_ids || {};
+    lastQuestionIds[philosophy] = lastId;
+
+    if (error && error.code !== 'PGRST116') {
+      console.error("Failed to fetch user settings:", error);
       return;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const { error: upsertError } = await supabase
+      .from('user_settings')
+      .upsert({ user_id: user.id, last_question_ids: lastQuestionIds }, { onConflict: 'user_id' });
 
-    fetch(`/api/users/me?userId=${userId}`, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`Failed to fetch user: ${res.statusText}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        setCurrentUser(data.username);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch user:", err);
-        localStorage.removeItem("userId");
-        localStorage.removeItem("currentUser");
-        router.push("/login");
-      })
-      .finally(() => {
-        clearTimeout(timeoutId);
-        setIsLoading(false);
-      });
-
-    if (typeof window !== "undefined" && "Notification" in window) {
-      scheduleDailyNotification();
+    if (upsertError) {
+      console.error("Failed to save last question ID:", upsertError);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
-
-  const loadLastQuestionId = (philosophy: string): number => {
-    const stored = localStorage.getItem("lastQuestionIds");
-    if (stored) {
-      const lastQuestionIds = JSON.parse(stored);
-      return lastQuestionIds[philosophy] || -1;
-    }
-    return -1;
   };
 
-  const saveLastQuestionId = (philosophy: string, lastId: number) => {
-    const stored = localStorage.getItem("lastQuestionIds");
-    const lastQuestionIds = stored ? JSON.parse(stored) : {};
-    lastQuestionIds[philosophy] = lastId;
-    localStorage.setItem("lastQuestionIds", JSON.stringify(lastQuestionIds));
-  };
-
-  const savePoints = (action: string, points: number) => {
+  const savePoints = useCallback(async (action: string, points: number) => {
     const allowedActions = ["login", "action_select", "task_complete"];
     if (!allowedActions.includes(action)) {
       return;
     }
 
-    const pointLog: PointLog = {
-      id: uuidv4(),
-      action,
-      points,
-      timestamp: new Date().toISOString(),
-    };
-    const existingPoints = JSON.parse(localStorage.getItem("pointLogs") || "[]");
-    localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
-  };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
 
-  const handleLoginPoints = () => {
+    try {
+      const { error } = await supabase
+        .from('point_logs')
+        .insert({
+          user_id: user.id,
+          action,
+          points,
+          timestamp: new Date().toISOString(),
+        });
+
+      if (error) {
+        throw new Error(error.message || 'ポイントの保存に失敗しました');
+      }
+    } catch (err) {
+      console.error("Failed to save points:", err);
+    }
+  }, [supabase]);
+
+  const handleLoginPoints = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const currentDate = new Date().toDateString();
-    const lastPointAddedDate = localStorage.getItem("lastPointAddedDate");
 
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('last_point_added_date, last_login_date, login_streak')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error("Failed to fetch user settings:", error);
+      return;
+    }
+
+    const lastPointAddedDate = data?.last_point_added_date;
     if (lastPointAddedDate === currentDate) {
       return;
     }
 
-    const lastLogin = localStorage.getItem("lastLoginDate");
-    const streakCount = parseInt(localStorage.getItem("loginStreak") || "0");
+    const lastLogin = data?.last_login_date;
+    const streakCount = data?.login_streak || 0;
 
     let newStreak = 1;
     if (lastLogin) {
@@ -135,41 +193,24 @@ export default function Home() {
       }
     }
 
-    localStorage.setItem("lastLoginDate", currentDate);
-    localStorage.setItem("loginStreak", newStreak.toString());
-    localStorage.setItem("lastPointAddedDate", currentDate);
+    const { error: upsertError } = await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: user.id,
+        last_login_date: currentDate,
+        login_streak: newStreak,
+        last_point_added_date: currentDate,
+      }, { onConflict: 'user_id' });
+
+    if (upsertError) {
+      console.error("Failed to update user settings:", upsertError);
+      return;
+    }
 
     const basePoints = 30;
     const bonusPoints = newStreak * 6;
-    savePoints("login", basePoints + bonusPoints);
-  };
-
-  const scheduleDailyNotification = () => {
-    const now = new Date();
-    const next7AM = new Date();
-    next7AM.setHours(7, 0, 0, 0);
-
-    if (now.getHours() >= 7) {
-      next7AM.setDate(next7AM.getDate() + 1);
-    }
-
-    const timeUntil7AM = next7AM.getTime() - now.getTime();
-
-    setTimeout(() => {
-      if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-      }
-
-      if (Notification.permission === "granted") {
-        new Notification("nbrcd: セッション開始", {
-          body: "セッションを開始しましょう！",
-          icon: "/nbrcd_logo.png",
-        });
-      }
-
-      scheduleDailyNotification();
-    }, timeUntil7AM);
-  };
+    await savePoints("login", basePoints + bonusPoints);
+  }, [supabase, savePoints]);
 
   const extractActions = (reply: string): { updatedReply: string; actions: string[] } => {
     const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
@@ -194,21 +235,19 @@ export default function Home() {
 
   useEffect(() => {
     handleLoginPoints();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // handleLoginPoints は初回レンダリング時のみ実行されるため、依存配列に含める必要なし
+  }, [handleLoginPoints]);
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId || !selectedPhilosopherId) return;
+    const checkSession = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !selectedPhilosopherId) return;
 
-    const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setSessionId(newSessionId);
-    localStorage.setItem("sessionId", newSessionId);
-
-    return () => {
-      // ログ記録はゲストユーザーでは行わないため、ここでは何もしない
+      const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setSessionId(newSessionId);
     };
-  }, [selectedPhilosopherId, dailyQuestion?.category]);
+
+    checkSession();
+  }, [selectedPhilosopherId, dailyQuestion?.category, supabase.auth]);
 
   useEffect(() => {
     if (selectedPhilosopherId) {
@@ -216,39 +255,43 @@ export default function Home() {
         .filter((q) => q.philosophy === selectedPhilosopherId)
         .sort((a, b) => a.id - b.id);
 
-      const lastId = loadLastQuestionId(selectedPhilosopherId);
-      let nextQuestion = philosopherQuestions.find((q) => q.id > lastId);
-
-      if (!nextQuestion) {
-        nextQuestion = philosopherQuestions[0];
-      }
-
-      setDailyQuestion(nextQuestion);
-      setMessages([]);
-      setSessionStarted(false);
-      setParsedResult(null);
-      setSystemMessage(null);
-      setSelectedAction(null);
+      loadLastQuestionId(selectedPhilosopherId).then((lastId) => {
+        let nextQuestion = philosopherQuestions.find((q) => q.id > lastId);
+        if (!nextQuestion) {
+          nextQuestion = philosopherQuestions[0];
+        }
+        setDailyQuestion(nextQuestion);
+        setMessages([]);
+        setSessionStarted(false);
+        setParsedResult(null);
+        setSystemMessage(null);
+        setSelectedAction(null);
+      });
     }
-  }, [selectedPhilosopherId]);
+  }, [selectedPhilosopherId, loadLastQuestionId]);
 
   const saveLog = async (action: string, details?: Record<string, string>) => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
 
     const log: ActionLog = {
       action,
       timestamp: new Date().toISOString(),
-      sessionId,
-      philosopherId: selectedPhilosopherId,
-      category: dailyQuestion?.category,
+      sessionId: sessionId || '',
+      philosopherId: selectedPhilosopherId || '',
+      category: dailyQuestion?.category || '',
       details,
-      userId: parseInt(userId),
+      userId: user.id,
     };
 
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      console.log('Sending log:', log);
 
       const response = await fetch("/api/logs", {
         method: "POST",
@@ -267,38 +310,46 @@ export default function Home() {
       }
       console.log("Successfully saved log to server:", log);
 
-      await fetch("/api/sessions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: parseInt(userId),
+      const { error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: user.id,
           conversation: messages,
           analysis: { sessionCount: messages.length },
           score: messages.length * 10,
-        }),
-        signal: controller.signal,
-      });
+        });
+
+      if (sessionError) {
+        console.error("Failed to save session:", sessionError);
+      }
     } catch (error) {
       console.error("Failed to save log:", error);
     }
   };
 
-  const saveActionToLocalStorageAndRedirect = (action: string) => {
-    const existingTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    const newTodo = {
-      id: uuidv4(),
-      text: action,
-      completed: false,
-      date: new Date().toISOString(),
-    };
-    localStorage.setItem("todos", JSON.stringify([...existingTodos, newTodo]));
+  const saveActionToLocalStorageAndRedirect = async (action: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-    saveLog("end_session", { action: "Session ended after action plan selection" });
+    const { error } = await supabase
+      .from('todos')
+      .insert({
+        id: uuidv4(),
+        user_id: user.id,
+        text: action,
+        completed: false,
+        date: new Date().toISOString(),
+      });
+
+    if (error) {
+      console.error("Failed to save todo:", error);
+      return;
+    }
+
+    await saveLog("end_session", { action: "Session ended after action plan selection" });
 
     if (selectedPhilosopherId && dailyQuestion) {
-      saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
+      await saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
     }
 
     router.push("/todo/list");

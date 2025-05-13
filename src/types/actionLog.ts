@@ -1,10 +1,9 @@
-// types/actionLog.ts
 export interface ActionLog {
   action: string;
-  timestamp: string; // Date から string に変更
+  timestamp: string;
   sessionId: string;
   philosopherId: string;
-  category?: string;
+  category: string;
   details?: Record<string, string>;
-  userId: number;
+  userId: string;
 }

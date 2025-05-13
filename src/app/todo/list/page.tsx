@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaTrophy } from "react-icons/fa";
+import { createClient } from '@/utils/supabase/client';
 import { v4 as uuidv4 } from "uuid";
+
 
 interface Todo {
   id: string;
@@ -12,13 +14,6 @@ interface Todo {
   date: string;
   dueDate?: string;
   completedDate?: string;
-}
-
-interface PointLog {
-  id: string;
-  action: string;
-  points: number;
-  timestamp: string;
 }
 
 export default function TodoListPage() {
@@ -31,17 +26,36 @@ export default function TodoListPage() {
   const [dueDate, setDueDate] = useState<string>("");
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
+  const supabase = createClient();
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      router.push("/login");
-      return;
-    }
+    const fetchTodos = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
 
-    const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    setTodos(storedTodos.filter((todo: Todo) => !todo.completed));
-  }, [router]);
+      try {
+        const { data, error } = await supabase
+          .from('todos')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('completed', false)
+          .order('date', { ascending: true });
+
+        if (error) {
+          throw new Error(error.message || 'タスクの取得に失敗しました');
+        }
+
+        setTodos(data || []);
+      } catch (err) {
+        console.error("Failed to fetch todos:", err);
+      }
+    };
+
+    fetchTodos();
+  }, [router, supabase]);
 
   useEffect(() => {
     setSwipeStates((prev) => {
@@ -55,73 +69,135 @@ export default function TodoListPage() {
     });
   }, [todos]);
 
-  const savePoints = (action: string, points: number) => {
+  const savePoints = async (action: string, points: number) => {
     const allowedActions = ["login", "action_select", "task_complete"];
     if (!allowedActions.includes(action)) {
       return;
     }
 
-    const pointLog: PointLog = {
-      id: uuidv4(),
-      action,
-      points,
-      timestamp: new Date().toISOString(),
-    };
-    const existingPoints = JSON.parse(localStorage.getItem("pointLogs") || "[]");
-    localStorage.setItem("pointLogs", JSON.stringify([...existingPoints, pointLog]));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('point_logs')
+        .insert({
+          user_id: user.id,
+          action,
+          points,
+          timestamp: new Date().toISOString(),
+        });
+
+      if (error) {
+        throw new Error(error.message || 'ポイントの保存に失敗しました');
+      }
+    } catch (err) {
+      console.error("Failed to save points:", err);
+    }
   };
 
-  const handleAddTask = () => {
+  const handleAddTask = async () => {
     if (newTask.trim() === "") return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
+
     const newTodo: Todo = {
       id: uuidv4(),
       text: newTask,
       completed: false,
       date: new Date().toISOString(),
     };
-    const updatedTodos = [...todos, newTodo];
-    const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    localStorage.setItem("todos", JSON.stringify([...allTodos, newTodo]));
-    setTodos(updatedTodos);
-    setNewTask("");
+
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .insert({
+          id: newTodo.id,
+          user_id: user.id,
+          text: newTodo.text,
+          completed: newTodo.completed,
+          date: newTodo.date,
+        });
+
+      if (error) {
+        throw new Error(error.message || 'タスクの追加に失敗しました');
+      }
+
+      setTodos([...todos, newTodo]);
+      setNewTask("");
+    } catch (err) {
+      console.error("Failed to add task:", err);
+    }
   };
 
-  const handleToggle = (id: string) => {
+  const handleToggle = async (id: string) => {
     setCompletedTodos((prev) => [...prev, id]);
 
-    const updatedTodos = todos.map((todo) =>
-      todo.id === id
-        ? { ...todo, completed: true, completedDate: new Date().toISOString() }
-        : todo
-    );
-    const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    const newAllTodos = allTodos.map((todo: Todo) =>
-      todo.id === id
-        ? { ...todo, completed: true, completedDate: new Date().toISOString() }
-        : todo
-    );
-    localStorage.setItem("todos", JSON.stringify(newAllTodos));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
 
-    setTimeout(() => {
-      setTodos(updatedTodos.filter((todo) => !todo.completed));
-      setCompletedTodos((prev) => prev.filter((todoId) => todoId !== id));
-    }, 300);
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({
+          completed: true,
+          completed_date: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
 
-    savePoints("task_complete", 10);
+      if (error) {
+        throw new Error(error.message || 'タスクの更新に失敗しました');
+      }
+
+      setTimeout(() => {
+        setTodos(todos.filter((todo) => todo.id !== id));
+        setCompletedTodos((prev) => prev.filter((todoId) => todoId !== id));
+      }, 300);
+
+      await savePoints("task_complete", 10);
+    } catch (err) {
+      console.error("Failed to toggle task:", err);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     setDeletedTodos((prev) => [...prev, id]);
 
-    const updatedTodos = todos.filter((todo) => todo.id !== id);
-    const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    const newAllTodos = allTodos.filter((todo: Todo) => todo.id !== id);
-    localStorage.setItem("todos", JSON.stringify(newAllTodos));
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
 
-    setTimeout(() => {
-      setTodos(updatedTodos);
-      setDeletedTodos((prev) => prev.filter((todoId) => todoId !== id));
-    }, 300);
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw new Error(error.message || 'タスクの削除に失敗しました');
+      }
+
+      setTimeout(() => {
+        setTodos(todos.filter((todo) => todo.id !== id));
+        setDeletedTodos((prev) => prev.filter((todoId) => todoId !== id));
+      }, 300);
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
   };
 
   const handleTouchStart = (id: string, e: React.TouchEvent<HTMLDivElement>) => {
@@ -155,19 +231,37 @@ export default function TodoListPage() {
     setDueDate(todo?.dueDate || "");
   };
 
-  const saveDueDate = () => {
+  const saveDueDate = async () => {
     if (selectedTodoId === null) return;
-    const updatedTodos = todos.map((todo) =>
-      todo.id === selectedTodoId ? { ...todo, dueDate: dueDate } : todo
-    );
-    const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    const newAllTodos = allTodos.map((todo: Todo) =>
-      todo.id === selectedTodoId ? { ...todo, dueDate: dueDate } : todo
-    );
-    localStorage.setItem("todos", JSON.stringify(newAllTodos));
-    setTodos(updatedTodos);
-    setSelectedTodoId(null);
-    setDueDate("");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({
+          due_date: dueDate,
+        })
+        .eq('id', selectedTodoId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw new Error(error.message || '期限の保存に失敗しました');
+      }
+
+      const updatedTodos = todos.map((todo) =>
+        todo.id === selectedTodoId ? { ...todo, dueDate: dueDate } : todo
+      );
+      setTodos(updatedTodos);
+      setSelectedTodoId(null);
+      setDueDate("");
+    } catch (err) {
+      console.error("Failed to save due date:", err);
+    }
   };
 
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {

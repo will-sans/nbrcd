@@ -1,60 +1,79 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { prisma } from "@/lib/prisma";
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@/utils/supabase/server';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method === "POST") {
-    const { action, timestamp, sessionId, philosopherId, category, details, userId } = req.body;
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const supabase = createClient(req, res);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    if (!action || !timestamp || !sessionId || !philosopherId || !userId) {
-      return res.status(400).json({ error: "必要なフィールドがありません" });
+  if (!user) {
+    return res.status(401).json({ error: '認証されていません' });
+  }
+
+  if (req.method === 'POST') {
+    const {
+      action,
+      timestamp,
+      sessionId,
+      philosopherId,
+      category,
+      details,
+      userId,
+    } = req.body;
+
+    if (!action || !timestamp || !userId) {
+      return res.status(400).json({ error: '必要なフィールドがありません' });
     }
-
-    // userId のバリデーション
-    const parsedUserId = parseInt(userId);
-    if (isNaN(parsedUserId)) {
-      return res.status(400).json({ error: "ユーザーIDが無効です" });
+    if (userId !== user.id) {
+      return res.status(403).json({ error: '不正なユーザーIDです' });
     }
 
     try {
-      const log = await prisma.actionLog.create({
-        data: {
+      const { data, error } = await supabase
+        .from('action_logs')
+        .insert({
           action,
           timestamp,
-          sessionId,
-          philosopherId,
-          category,
-          details,
-          userId: parsedUserId,
-        },
-      });
+          session_id: sessionId || null,
+          philosopher_id: philosopherId || null,
+          category: category || null,
+          details: details || {},
+          user_id: userId,
+        })
+        .select()
+        .single();
 
-      res.status(200).json(log);
+      if (error) {
+        throw new Error(error.message || 'ログの保存に失敗しました');
+      }
+
+      res.status(200).json(data);
     } catch (error) {
-      const err = error as Error;
-      console.error("Error saving log:", err.message, err.stack); // 詳細なエラーログを出力
-      res.status(500).json({ error: "ログの保存に失敗しました", details: err.message });
+      console.error('Failed to save log:', error);
+      res.status(500).json({ error: 'ログの保存に失敗しました' });
     }
-  } else if (req.method === "GET") {
-    const { userId } = req.query;
-
-    if (!userId || typeof userId !== "string") {
-      return res.status(400).json({ error: "ユーザーIDがありません" });
-    }
-
+  } else if (req.method === 'GET') {
     try {
-      const logs = await prisma.actionLog.findMany({
-        where: { userId: parseInt(userId) },
-        orderBy: { timestamp: "desc" },
-      });
+      const { data, error } = await supabase
+        .from('action_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: false });
 
-      res.status(200).json(logs);
+      if (error) {
+        throw new Error(error.message || 'ログの取得に失敗しました');
+      }
+
+      res.status(200).json(data);
     } catch (error) {
-      const err = error as Error;
-      console.error("Error fetching logs:", err.message, err.stack);
-      res.status(500).json({ error: "ログの取得に失敗しました", details: err.message });
+      console.error('Failed to fetch logs:', error);
+      res.status(500).json({ error: 'ログの取得に失敗しました' });
     }
   } else {
-    res.setHeader("Allow", ["GET", "POST"]);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 }

@@ -1,50 +1,69 @@
-import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@/utils/supabase/server';
 
-const prisma = new PrismaClient();
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { username } = req.body;
+  const { username, email, password } = req.body;
+  console.log('Received body:', { username, email });
 
   if (!username || username.length < 3) {
-    return res.status(400).json({ error: "ユーザー名は3文字以上で入力してください" });
+    return res
+      .status(400)
+      .json({ error: 'ユーザー名は3文字以上で入力してください' });
+  }
+  if (!email) {
+    return res.status(400).json({ error: 'メールアドレスを入力してください' });
+  }
+  if (!password || password.length < 6) {
+    return res
+      .status(400)
+      .json({ error: 'パスワードは6文字以上で入力してください' });
   }
 
   try {
-    // 同じusernameが既に存在するか確認
-    const existingUser = await prisma.user.findUnique({
-      where: { username },
-    });
-
-    if (existingUser) {
-      return res.status(409).json({ error: "このユーザー名はすでに使用されています" });
-    }
-
-    const user = await prisma.user.create({
-      data: {
-        username,
+    const supabase = createClient(req, res);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { username },
       },
     });
-    res.status(200).json(user);
-  } catch (error) {
-    console.error("Failed to register user:", error);
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") {
-        // 一意性制約違反
-        return res.status(409).json({ error: "このユーザー名はすでに使用されています" });
+
+    if (error) {
+      if (error.message.includes('User already registered')) {
+        return res
+          .status(409)
+          .json({ error: 'このメールアドレスはすでに登録されています' });
       }
+      throw new Error(error.message || 'ユーザー登録に失敗しました');
     }
-    // errorをError型にキャスト
+
+    if (!data.user) {
+      throw new Error('ユーザー登録に失敗しました');
+    }
+
+    res.status(200).json({
+      id: data.user.id,
+      username,
+      email: data.user.email,
+    });
+  } catch (error) {
+    console.error('Failed to register user:', error);
     if (error instanceof Error) {
-      res.status(500).json({ error: "ユーザー登録に失敗しました", details: error.message });
-    } else {
-      res.status(500).json({ error: "ユーザー登録に失敗しました", details: "不明なエラーが発生しました" });
+      return res
+        .status(500)
+        .json({ error: 'ユーザー登録に失敗しました', details: error.message });
     }
-  } finally {
-    await prisma.$disconnect();
+    return res.status(500).json({
+      error: 'ユーザー登録に失敗しました',
+      details: '不明なエラーが発生しました',
+    });
   }
 }

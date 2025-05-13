@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaTrophy } from "react-icons/fa";
+import { createClient } from '@/utils/supabase/client';
 
 interface Todo {
   id: string;
@@ -23,49 +24,110 @@ export default function CompletedTodoPage() {
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [exitingTodos, setExitingTodos] = useState<Map<string, "restore" | "delete">>(new Map());
+  const supabase = createClient();
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      router.push("/login");
-      return;
-    }
-
-    const storedTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-    const completed = storedTodos.filter((todo: Todo) => todo.completed);
-    setCompletedTodos(completed);
-
-    const grouped = completed.reduce((acc: GroupedTodos, todo: Todo) => {
-      const completedDate = todo.completedDate
-        ? new Date(todo.completedDate).toLocaleDateString("ja-JP", {
-            month: "long",
-            day: "numeric",
-            weekday: "short",
-          })
-        : "不明な日付";
-      if (!acc[completedDate]) {
-        acc[completedDate] = [];
+    const fetchCompletedTodos = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
       }
-      acc[completedDate].push(todo);
-      return acc;
-    }, {});
-    setGroupedTodos(grouped);
-  }, [router]);
 
-  const handleRestoreTodo = (id: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('todos')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('completed', true)
+          .order('completed_date', { ascending: false });
+
+        if (error) {
+          throw new Error(error.message || '完了済みタスクの取得に失敗しました');
+        }
+
+        setCompletedTodos(data || []);
+
+        const grouped = data.reduce((acc: GroupedTodos, todo: Todo) => {
+          const completedDate = todo.completedDate
+            ? new Date(todo.completedDate).toLocaleDateString("ja-JP", {
+                month: "long",
+                day: "numeric",
+                weekday: "short",
+              })
+            : "不明な日付";
+          if (!acc[completedDate]) {
+            acc[completedDate] = [];
+          }
+          acc[completedDate].push(todo);
+          return acc;
+        }, {});
+        setGroupedTodos(grouped);
+      } catch (err) {
+        console.error("Failed to fetch completed todos:", err);
+      }
+    };
+
+    fetchCompletedTodos();
+  }, [router, supabase]);
+
+  const handleRestoreTodo = async (id: string) => {
     setExitingTodos((prev) => {
       const newMap = new Map(prev);
       newMap.set(id, "restore");
       return newMap;
     });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({
+          completed: false,
+          completed_date: null,
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw new Error(error.message || 'タスクの復元に失敗しました');
+      }
+    } catch (err) {
+      console.error("Failed to restore task:", err);
+    }
   };
 
-  const handleDeleteTodo = (id: string) => {
+  const handleDeleteTodo = async (id: string) => {
     setExitingTodos((prev) => {
       const newMap = new Map(prev);
       newMap.set(id, "delete");
       return newMap;
     });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn('No user found in Supabase Auth');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw new Error(error.message || 'タスクの削除に失敗しました');
+      }
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
   };
 
   const onTransitionEnd = (id: string) => {
@@ -73,14 +135,7 @@ export default function CompletedTodoPage() {
     if (!action) return;
 
     if (action === "restore") {
-      const updatedCompletedTodos = completedTodos.filter((todo) => todo.id !== id);
-      const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-      const newAllTodos = allTodos.map((todo: Todo) =>
-        todo.id === id ? { ...todo, completed: false, completedDate: undefined } : todo
-      );
-      localStorage.setItem("todos", JSON.stringify(newAllTodos));
-      setCompletedTodos(updatedCompletedTodos);
-
+      setCompletedTodos(completedTodos.filter((todo) => todo.id !== id));
       const updatedGrouped = { ...groupedTodos };
       for (const date in updatedGrouped) {
         updatedGrouped[date] = updatedGrouped[date].filter((todo) => todo.id !== id);
@@ -90,12 +145,7 @@ export default function CompletedTodoPage() {
       }
       setGroupedTodos(updatedGrouped);
     } else if (action === "delete") {
-      const updatedCompletedTodos = completedTodos.filter((todo) => todo.id !== id);
-      const allTodos = JSON.parse(localStorage.getItem("todos") || "[]");
-      const newAllTodos = allTodos.filter((todo: Todo) => todo.id !== id);
-      localStorage.setItem("todos", JSON.stringify(newAllTodos));
-      setCompletedTodos(updatedCompletedTodos);
-
+      setCompletedTodos(completedTodos.filter((todo) => todo.id !== id));
       const updatedGrouped = { ...groupedTodos };
       for (const date in updatedGrouped) {
         updatedGrouped[date] = updatedGrouped[date].filter((todo) => todo.id !== id);
