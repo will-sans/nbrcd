@@ -20,6 +20,12 @@ interface ParsedSessionResult {
   actions: string[];
 }
 
+interface SessionMetadata {
+  summary: string;
+  user_inputs: string[];
+  selected_action: string | null;
+}
+
 export default function Home() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -35,6 +41,7 @@ export default function Home() {
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionMetadata, setSessionMetadata] = useState<SessionMetadata | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -217,64 +224,55 @@ export default function Home() {
     let updatedReply = reply;
     let actions: string[] = [];
 
-    // 3回目の応答（アクションプランを含む）の場合のみ「？」を削除
     const shouldRemoveQuestions = assistantReplyCount >= 3 && actionPlanMatch;
 
     if (actionPlanMatch) {
-      // アクションプランを除去
       updatedReply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
-
-      // 「まとめ：」で分割
       const parts = updatedReply.split("まとめ：");
       let beforeSummary = parts[0]?.trim() || "";
       let summaryPart = parts[1]?.trim() || "";
 
       if (shouldRemoveQuestions) {
-        // 「まとめ：」以前の部分（通常の応答の3文）を処理
         if (beforeSummary) {
           const beforeSentences = beforeSummary.split("。").filter((s) => s.trim() !== "");
           if (beforeSentences.length > 0 && beforeSentences[beforeSentences.length - 1].trim().endsWith("？")) {
-            beforeSentences.pop(); // 最後の疑問文を除去
+            beforeSentences.pop();
           }
           beforeSummary = beforeSentences.join("。");
           if (beforeSummary) {
-            beforeSummary += "。"; // 最後に「。」を追加
+            beforeSummary += "。";
           }
         }
 
-        // 「まとめ：」以降の部分を処理
         if (summaryPart) {
           const summarySentences = summaryPart.split("。").filter((s) => s.trim() !== "");
           if (summarySentences.length > 0 && summarySentences[summarySentences.length - 1].trim().endsWith("？")) {
-            summarySentences.pop(); // 最後の疑問文を除去
+            summarySentences.pop();
           }
           summaryPart = summarySentences.join("。");
           if (summaryPart) {
-            summaryPart += "。"; // 最後に「。」を追加
+            summaryPart += "。";
           }
         }
       }
 
-      // 応答を再構築
       updatedReply = beforeSummary;
       if (summaryPart) {
         updatedReply += `\n\nまとめ：${summaryPart}`;
       }
 
-      // アクションプランを抽出
       const actionsText = actionPlanMatch[0];
       actions = actionsText.split(", ").map((action) =>
         action.replace(/^\d+\.\s/, "").replace(/^\[|\]$/g, "").trim()
       );
     } else if (shouldRemoveQuestions) {
-      // アクションプランがない場合も、3回目の応答なら疑問文を除去
       const sentences = updatedReply.split("。").filter((s) => s.trim() !== "");
       if (sentences.length > 0 && sentences[sentences.length - 1].trim().endsWith("？")) {
-        sentences.pop(); // 最後の疑問文を除去
+        sentences.pop();
       }
       updatedReply = sentences.join("。");
       if (updatedReply) {
-        updatedReply += "。"; // 最後に「。」を追加
+        updatedReply += "。";
       }
     }
 
@@ -285,6 +283,154 @@ export default function Home() {
     handleLoginPoints();
   }, [handleLoginPoints]);
 
+  const loadSessionMetadata = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !selectedPhilosopherId) return;
+
+    const { data, error } = await supabase
+      .from('user_session_metadata')
+      .select('summary, user_inputs, selected_action')
+      .eq('user_id', user.id)
+      .eq('philosopher_id', selectedPhilosopherId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        setSessionMetadata({
+          summary: "",
+          user_inputs: [],
+          selected_action: null,
+        });
+      } else {
+        console.error("Failed to load session metadata:", error, "Message:", error.message, "Details:", error.details);
+        setSessionMetadata({
+          summary: "",
+          user_inputs: [],
+          selected_action: null,
+        });
+      }
+      return;
+    }
+
+    setSessionMetadata({
+      summary: data.summary || "",
+      user_inputs: data.user_inputs || [],
+      selected_action: data.selected_action || null,
+    });
+  }, [selectedPhilosopherId, supabase]);
+
+  const generateUserMetadata = async (previousSummary: string, userInputs: string[], selectedAction: string | null, retries = 3) => {
+    const prompt = `
+あなたはユーザーの行動や傾向を簡潔に要約する役割を担います。以下の情報をもとに、ユーザーのメタデータを400字以内で生成してください。メタデータは「${currentUser}さんのメタデータ：」で始まり、ユーザーの関心や行動傾向、最近の取り組みを自然な文でまとめてください。
+
+**過去のメタデータ（前回の要約）**：
+${previousSummary || "なし"}
+
+**今回のセッションのユーザー回答**：
+${JSON.stringify(userInputs)}
+
+**今回の選択したアクションプラン**：
+${selectedAction || "なし"}
+
+**生成例**：
+WILLさんのメタデータ：アプリの開発を通じて世の中を良くしたいと考えている。最近は、会議の生産性を上げるために議題と目的を明確化しようとしている。
+`;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        console.log(`Attempt ${attempt}: Sending metadata generation request...`);
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o",
+            messages: [{ role: "system", content: prompt }],
+            temperature: 0.3,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "メタデータの生成に失敗しました");
+        }
+
+        const data = await response.json();
+        const generatedSummary = data.choices[0]?.message?.content || "";
+        console.log(`Attempt ${attempt}: Successfully generated metadata:`, generatedSummary);
+        return generatedSummary;
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          console.error(`Attempt ${attempt} failed:`, error.message);
+        } else {
+          console.error(`Attempt ${attempt} failed:`, String(error));
+        }
+        if (attempt === retries) {
+          console.error("Max retries reached, falling back to previous summary");
+          return previousSummary || "";
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+
+    return previousSummary || "";
+  };
+
+  const saveSessionMetadata = async (action: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.error("No user found, skipping metadata save");
+      return;
+    }
+
+    const userInputs = messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.content);
+
+    const previousSummary = sessionMetadata?.summary || "";
+    let newSummary = previousSummary;
+
+    try {
+      newSummary = await generateUserMetadata(previousSummary, userInputs, action);
+    } catch (err) {
+      console.error("Failed to generate new metadata:", err);
+    }
+
+    const { error } = await supabase
+      .from('user_session_metadata')
+      .upsert({
+        user_id: user.id,
+        session_id: sessionId,
+        philosopher_id: selectedPhilosopherId,
+        summary: newSummary,
+        user_inputs: userInputs,
+        selected_action: action,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id, philosopher_id' });
+
+    if (error) {
+      console.error("Failed to save session metadata to Supabase:", error, "Message:", error.message, "Details:", error.details);
+    } else {
+      console.log("Successfully saved session metadata to Supabase:", {
+        user_id: user.id,
+        session_id: sessionId,
+        philosopher_id: selectedPhilosopherId,
+        summary: newSummary,
+        user_inputs: userInputs,
+        selected_action: action,
+      });
+    }
+  };
+
   useEffect(() => {
     const checkSession = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -292,10 +438,11 @@ export default function Home() {
 
       const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setSessionId(newSessionId);
+      await loadSessionMetadata();
     };
 
     checkSession();
-  }, [selectedPhilosopherId, dailyQuestion?.category, supabase.auth]);
+  }, [selectedPhilosopherId, dailyQuestion?.category, supabase.auth, loadSessionMetadata]);
 
   useEffect(() => {
     if (selectedPhilosopherId) {
@@ -396,6 +543,10 @@ export default function Home() {
 
     await saveLog("end_session", { action: "Session ended after action plan selection" });
 
+    saveSessionMetadata(action).catch((err) => {
+      console.error("Failed to save session metadata in background:", err);
+    });
+
     if (selectedPhilosopherId && dailyQuestion) {
       await saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
     }
@@ -430,8 +581,21 @@ export default function Home() {
       return;
     }
 
+    const userSummary = sessionMetadata?.summary || `${currentUser}さんのメタデータ：まだセッション履歴がありません。`;
+
     const systemPromptWithQuestion = `
 あなたは${selectedPhilosopher.name}として、ユーザーの学びと成長を促す対話を提供するプロフェッショナルなコーチです。ユーザーの課題や考えを深掘りし、${selectedPhilosopher.name}の哲学的視点や教えを基に、自然な会話を通じて洞察や新たな視点を提示してください。以下のガイドラインに従ってください：
+
+**ユーザーの前提情報**：
+- 以下のメタデータを参考に、ユーザーの傾向や関心を考慮したパーソナライズされた応答を生成してください。
+- ${userSummary}
+- 例：ユーザーのメタデータに「会議の生産性を上げるために議題と目的を明確化しようとしている」とある場合、会議に関する話題が出たらその点を意識して応答してください。
+
+**セッションの目的**：
+- このセッションの目的は、ユーザーが以下の「学び」と「教訓」に会話の中で気づき、それを自身の課題や行動に活かすことです。
+- 学び：${dailyQuestion.learning}
+- 教訓：${dailyQuestion.quote}
+- 会話の中で、ユーザーがこの「学び」と「教訓」に自然と気づくように導き、自己反省や行動変容を促してください。
 
 1. **応答の構造**：
    - 応答は3文で構成してください。1文目はユーザーの感情や課題に共感する内容、2文目は${selectedPhilosopher.name}の哲学的視点や教えを引用して洞察を提供する内容、3文目は自己反省を促す質問とする。
@@ -442,6 +606,7 @@ export default function Home() {
 2. **学びと成長を促す**：
    - ユーザーの入力に対して、${selectedPhilosopher.name}の哲学的視点や教えを引用し、関連する洞察を提供してください。
    - 自己反省を促す質問を投げかけ、次の対話を誘導してください。
+   - 会話の中で、上記の「学び」と「教訓」にユーザーが気づくよう、自然に導いてください。
 
 3. **自然な会話**：
    - 定型的な応答を避け、自然な会話の流れを維持してください。
@@ -452,6 +617,7 @@ export default function Home() {
    - まとめ：これまでの対話を簡潔に振り返り、学びや気づきを強調してください（1～2文）。「まとめ：」の前に改行を2回（\n\n）入れてください。
    - アクションプラン：ユーザーの成長に直結する3つの具体的な行動を提案してください。形式は厳密に以下の通りでなければなりません：
      - 1. [行動1], 2. [行動2], 3. [行動3]
+   - アクションプランは、上記の「学び」と「教訓」に基づき、ユーザーが「やるべきこと」を見極めて行動に移せる内容にしてください。
    - 例：
      ここまでの対話で、時間管理の課題が見えてきましたね。\n\n
      まとめ：これまでの対話を通じて、時間管理の重要性について深く考えることができました。
@@ -512,7 +678,6 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      // 現在の assistant の応答回数をカウント（新しい応答を追加する前）
       const assistantReplyCount = messages.filter((m) => m.role === "assistant").length + 1;
 
       const { updatedReply, actions } = extractActions(reply, assistantReplyCount);
@@ -590,7 +755,6 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      // 現在の assistant の応答回数をカウント（新しい応答を追加する前）
       const assistantReplyCount = messages.filter((m) => m.role === "assistant").length + 1;
 
       const { updatedReply, actions } = extractActions(reply, assistantReplyCount);
