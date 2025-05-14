@@ -8,4 +8,12 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true
   },
+  "tailwindCSS.includeLanguages": {
+    "plaintext": "css"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "tailwindCSS.validate": true,
+  "css.lint.unknownAtRules": "ignore"
 }

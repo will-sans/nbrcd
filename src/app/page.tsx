@@ -212,22 +212,70 @@ export default function Home() {
     await savePoints("login", basePoints + bonusPoints);
   }, [supabase, savePoints]);
 
-  const extractActions = (reply: string): { updatedReply: string; actions: string[] } => {
+  const extractActions = (reply: string, assistantReplyCount: number): { updatedReply: string; actions: string[] } => {
     const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
     let updatedReply = reply;
     let actions: string[] = [];
 
+    // 3回目の応答（アクションプランを含む）の場合のみ「？」を削除
+    const shouldRemoveQuestions = assistantReplyCount >= 3 && actionPlanMatch;
+
     if (actionPlanMatch) {
+      // アクションプランを除去
       updatedReply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
-      if (updatedReply.includes("まとめ：")) {
-        const parts = updatedReply.split("まとめ：");
-        updatedReply = `${parts[0].trim()}\n\nまとめ：${parts[1]?.trim() || ""}`;
+
+      // 「まとめ：」で分割
+      const parts = updatedReply.split("まとめ：");
+      let beforeSummary = parts[0]?.trim() || "";
+      let summaryPart = parts[1]?.trim() || "";
+
+      if (shouldRemoveQuestions) {
+        // 「まとめ：」以前の部分（通常の応答の3文）を処理
+        if (beforeSummary) {
+          const beforeSentences = beforeSummary.split("。").filter((s) => s.trim() !== "");
+          if (beforeSentences.length > 0 && beforeSentences[beforeSentences.length - 1].trim().endsWith("？")) {
+            beforeSentences.pop(); // 最後の疑問文を除去
+          }
+          beforeSummary = beforeSentences.join("。");
+          if (beforeSummary) {
+            beforeSummary += "。"; // 最後に「。」を追加
+          }
+        }
+
+        // 「まとめ：」以降の部分を処理
+        if (summaryPart) {
+          const summarySentences = summaryPart.split("。").filter((s) => s.trim() !== "");
+          if (summarySentences.length > 0 && summarySentences[summarySentences.length - 1].trim().endsWith("？")) {
+            summarySentences.pop(); // 最後の疑問文を除去
+          }
+          summaryPart = summarySentences.join("。");
+          if (summaryPart) {
+            summaryPart += "。"; // 最後に「。」を追加
+          }
+        }
       }
 
+      // 応答を再構築
+      updatedReply = beforeSummary;
+      if (summaryPart) {
+        updatedReply += `\n\nまとめ：${summaryPart}`;
+      }
+
+      // アクションプランを抽出
       const actionsText = actionPlanMatch[0];
       actions = actionsText.split(", ").map((action) =>
         action.replace(/^\d+\.\s/, "").replace(/^\[|\]$/g, "").trim()
       );
+    } else if (shouldRemoveQuestions) {
+      // アクションプランがない場合も、3回目の応答なら疑問文を除去
+      const sentences = updatedReply.split("。").filter((s) => s.trim() !== "");
+      if (sentences.length > 0 && sentences[sentences.length - 1].trim().endsWith("？")) {
+        sentences.pop(); // 最後の疑問文を除去
+      }
+      updatedReply = sentences.join("。");
+      if (updatedReply) {
+        updatedReply += "。"; // 最後に「。」を追加
+      }
     }
 
     return { updatedReply, actions };
@@ -464,7 +512,10 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      const { updatedReply, actions } = extractActions(reply);
+      // 現在の assistant の応答回数をカウント（新しい応答を追加する前）
+      const assistantReplyCount = messages.filter((m) => m.role === "assistant").length + 1;
+
+      const { updatedReply, actions } = extractActions(reply, assistantReplyCount);
       reply = updatedReply;
 
       console.log("Processed reply:", reply);
@@ -539,7 +590,10 @@ ${input.trim()}
       let reply = data.choices[0]?.message?.content || "";
       console.log("Response:", reply);
 
-      const { updatedReply, actions } = extractActions(reply);
+      // 現在の assistant の応答回数をカウント（新しい応答を追加する前）
+      const assistantReplyCount = messages.filter((m) => m.role === "assistant").length + 1;
+
+      const { updatedReply, actions } = extractActions(reply, assistantReplyCount);
       reply = updatedReply;
 
       console.log("Processed reply:", reply);
