@@ -249,7 +249,14 @@ export default function TodoListPage() {
   const openDueDateModal = (id: string) => {
     setSelectedTodoId(id);
     const todo = todos.find((t) => t.id === id);
-    setDueDate(todo?.dueDate || "");
+    if (todo?.dueDate) {
+      // Convert ISO 8601 date (e.g., "2025-05-14T00:00:00.000Z") to YYYY-MM-DD format
+      const date = new Date(todo.dueDate);
+      const formattedDate = date.toISOString().split('T')[0]; // Extracts "2025-05-14"
+      setDueDate(formattedDate);
+    } else {
+      setDueDate("");
+    }
   };
 
   const saveDueDate = async () => {
