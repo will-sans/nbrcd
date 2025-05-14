@@ -226,7 +226,7 @@ export default function Home() {
 
       const actionsText = actionPlanMatch[0];
       actions = actionsText.split(", ").map((action) =>
-        action.replace(/^\d+\.\s/, "").trim()
+        action.replace(/^\d+\.\s/, "").replace(/^\[|\]$/g, "").trim()
       );
     }
 
