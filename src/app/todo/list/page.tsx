@@ -6,7 +6,6 @@ import { FaTrophy } from "react-icons/fa";
 import { createClient } from '@/utils/supabase/client';
 import { v4 as uuidv4 } from "uuid";
 
-
 interface Todo {
   id: string;
   text: string;
@@ -14,6 +13,17 @@ interface Todo {
   date: string;
   dueDate?: string;
   completedDate?: string;
+}
+
+// Interface for the raw data structure from Supabase (snake_case)
+interface SupabaseTodo {
+  id: string;
+  text: string;
+  completed: boolean;
+  date: string;
+  due_date?: string;
+  completed_date?: string;
+  user_id: string;
 }
 
 export default function TodoListPage() {
@@ -42,13 +52,24 @@ export default function TodoListPage() {
           .select('*')
           .eq('user_id', user.id)
           .eq('completed', false)
-          .order('date', { ascending: true });
+          .order('due_date', { ascending: true, nullsFirst: false }) // Sort by due_date first (nulls at the end)
+          .order('date', { ascending: true }); // Then by date
 
         if (error) {
           throw new Error(error.message || 'タスクの取得に失敗しました');
         }
 
-        setTodos(data || []);
+        // Map Supabase data (snake_case) to Todo interface (camelCase)
+        const mappedData = data?.map((todo: SupabaseTodo) => ({
+          id: todo.id,
+          text: todo.text,
+          completed: todo.completed,
+          date: todo.date,
+          dueDate: todo.due_date,
+          completedDate: todo.completed_date,
+        })) || [];
+
+        setTodos(mappedData);
       } catch (err) {
         console.error("Failed to fetch todos:", err);
       }
@@ -264,12 +285,31 @@ export default function TodoListPage() {
     }
   };
 
+  // Group todos by dueDate (if set) or date, and sort them properly
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
-    const date = todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : new Date(todo.date).toLocaleDateString();
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(todo);
+    const dateKey = todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : new Date(todo.date).toLocaleDateString();
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push(todo);
     return acc;
   }, {});
+
+  // Sort todos within each group by dueDate (if set) or date
+  const sortedGroupedTodos = Object.keys(groupedTodos)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    .reduce((acc: { [key: string]: Todo[] }, dateKey) => {
+      acc[dateKey] = groupedTodos[dateKey].sort((a, b) => {
+        // If both have dueDate, sort by dueDate
+        if (a.dueDate && b.dueDate) {
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        }
+        // If only one has dueDate, the one with dueDate comes first
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        // If neither has dueDate, sort by date
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+      return acc;
+    }, {});
 
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
@@ -314,59 +354,57 @@ export default function TodoListPage() {
         />
       </div>
 
-      {Object.keys(groupedTodos).length > 0 ? (
-        Object.keys(groupedTodos)
-          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
-          .map((date) => (
-            <div key={date}>
-              <h2 className="text-lg font-semibold mb-2">{date}</h2>
-              <ul className="space-y-2">
-                {groupedTodos[date].map((todo) => (
-                  <li key={todo.id} className="relative">
+      {Object.keys(sortedGroupedTodos).length > 0 ? (
+        Object.keys(sortedGroupedTodos).map((date) => (
+          <div key={date}>
+            <h2 className="text-lg font-semibold mb-2">{date}</h2>
+            <ul className="space-y-2">
+              {sortedGroupedTodos[date].map((todo) => (
+                <li key={todo.id} className="relative">
+                  <div
+                    className="flex items-center justify-between p-2 border rounded bg-gray-100 overflow-hidden"
+                    style={{
+                      transform: completedTodos.includes(todo.id)
+                        ? "translateX(100%)"
+                        : deletedTodos.includes(todo.id)
+                        ? "translateX(-100%)"
+                        : `translateX(${swipeStates[todo.id] || 0}px)`,
+                      transition: "transform 0.3s ease",
+                    }}
+                  >
                     <div
-                      className="flex items-center justify-between p-2 border rounded bg-gray-100 overflow-hidden"
-                      style={{
-                        transform: completedTodos.includes(todo.id)
-                          ? "translateX(100%)"
-                          : deletedTodos.includes(todo.id)
-                          ? "translateX(-100%)"
-                          : `translateX(${swipeStates[todo.id] || 0}px)`,
-                        transition: "transform 0.3s ease",
-                      }}
+                      className="flex items-center w-full"
+                      onTouchStart={(e) => handleTouchStart(todo.id, e)}
+                      onTouchMove={(e) => handleTouchMove(todo.id, e)}
+                      onTouchEnd={() => handleTouchEnd(todo.id)}
                     >
-                      <div
-                        className="flex items-center w-full"
-                        onTouchStart={(e) => handleTouchStart(todo.id, e)}
-                        onTouchMove={(e) => handleTouchMove(todo.id, e)}
-                        onTouchEnd={() => handleTouchEnd(todo.id)}
+                      <input
+                        type="radio"
+                        onChange={() => handleToggle(todo.id)}
+                        className="mr-2"
+                      />
+                      <span
+                        onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
+                        className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
                       >
-                        <input
-                          type="radio"
-                          onChange={() => handleToggle(todo.id)}
-                          className="mr-2"
-                        />
-                        <span
-                          onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
-                          className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
-                        >
-                          {todo.text}
-                        </span>
-                      </div>
-                      <div className="absolute right-0 h-full flex items-center">
-                        <button
-                          onClick={() => handleDelete(todo.id)}
-                          className="bg-red-500 text-white h-full px-4 py-2"
-                          style={{ display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none" }}
-                        >
-                          削除
-                        </button>
-                      </div>
+                        {todo.text}
+                      </span>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
+                    <div className="absolute right-0 h-full flex items-center">
+                      <button
+                        onClick={() => handleDelete(todo.id)}
+                        className="bg-red-500 text-white h-full px-4 py-2"
+                        style={{ display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none" }}
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
       ) : (
         <p className="text-gray-500 text-center">タスクがありません。新しいタスクを追加してください。</p>
       )}
