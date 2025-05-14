@@ -10,7 +10,7 @@ interface Todo {
   text: string;
   completed: boolean;
   date: string;
-  completedDate?: string;
+  completed_date?: string | null;
 }
 
 interface GroupedTodos {
@@ -48,23 +48,31 @@ export default function CompletedTodoPage() {
 
         setCompletedTodos(data || []);
 
-        const grouped = data.reduce((acc: GroupedTodos, todo: Todo) => {
-          const completedDate = todo.completedDate
-            ? new Date(todo.completedDate).toLocaleDateString("ja-JP", {
-                month: "long",
-                day: "numeric",
-                weekday: "short",
-              })
-            : "不明な日付";
-          if (!acc[completedDate]) {
-            acc[completedDate] = [];
+        const grouped = (data || []).reduce((acc: GroupedTodos, todo: Todo) => {
+          let completedDateStr = "不明な日付";
+          if (todo.completed_date) {
+            try {
+              const completedDate = new Date(todo.completed_date);
+              if (!isNaN(completedDate.getTime())) {
+                completedDateStr = completedDate.toLocaleDateString("ja-JP", {
+                  month: "long",
+                  day: "numeric",
+                  weekday: "short",
+                });
+              }
+            } catch {
+              console.warn(`Invalid date format for todo ${todo.id}: ${todo.completed_date}`);
+            }
           }
-          acc[completedDate].push(todo);
+          if (!acc[completedDateStr]) {
+            acc[completedDateStr] = [];
+          }
+          acc[completedDateStr].push(todo);
           return acc;
         }, {});
         setGroupedTodos(grouped);
-      } catch (err) {
-        console.error("Failed to fetch completed todos:", err);
+      } catch {
+        console.error("Failed to fetch completed todos");
       }
     };
 
@@ -256,8 +264,8 @@ export default function CompletedTodoPage() {
                       <div className="flex-1">
                         <span className="line-through">{todo.text}</span>
                         <p className="text-xs text-gray-500">
-                          {todo.completedDate
-                            ? new Date(todo.completedDate).toLocaleTimeString("ja-JP", {
+                          {todo.completed_date
+                            ? new Date(todo.completed_date).toLocaleTimeString("ja-JP", {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })
