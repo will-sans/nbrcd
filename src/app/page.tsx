@@ -42,14 +42,12 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMetadata, setSessionMetadata] = useState<SessionMetadata | null>(null);
-  const [isOnline, setIsOnline] = useState<boolean>(true); // 初期値をtrueに設定
+  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
-  // ネットワーク状態を監視する
   useEffect(() => {
-    // クライアントサイドでnavigatorが利用可能になってから状態を設定
     setIsOnline(navigator.onLine);
 
     const handleOnline = () => setIsOnline(true);
@@ -62,25 +60,9 @@ export default function Home() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, []); // 依存配列が空なので初回レンダリング時のみ実行
-
-  // アプリがフォアグラウンドに戻った際に状態をリフレッシュ
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        // アプリがフォアグラウンドに戻った場合、ユーザー情報を再取得
-        checkUser();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, []);
 
-  const checkUser = async (retries = 3, delay = 1000) => {
+  const checkUser = useCallback(async (retries = 3, delay = 1000) => {
     setIsLoading(true);
     setError(null);
 
@@ -121,7 +103,21 @@ export default function Home() {
         }
       }
     }
-  };
+  }, [router, supabase]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkUser();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [checkUser]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -137,7 +133,7 @@ export default function Home() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [router, supabase.auth]);
+  }, [router, supabase.auth, checkUser]);
 
   const loadLastQuestionId = useCallback(async (philosophy: string): Promise<number> => {
     const { data: { user } } = await supabase.auth.getUser();
