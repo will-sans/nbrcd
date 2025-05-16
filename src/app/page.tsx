@@ -42,40 +42,88 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMetadata, setSessionMetadata] = useState<SessionMetadata | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(true); // 初期値をtrueに設定
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
+  // ネットワーク状態を監視する
   useEffect(() => {
-    const checkUser = async (retries = 3, delay = 1000) => {
-      for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-          const { data: { user }, error } = await supabase.auth.getUser();
-          if (error || !user) {
-            throw new Error('認証されていません');
-          }
+    // クライアントサイドでnavigatorが利用可能になってから状態を設定
+    setIsOnline(navigator.onLine);
 
-          const response = await fetch("/api/users/me");
-          if (!response.ok) {
-            throw new Error(`Failed to fetch user: ${response.statusText}`);
-          }
-          const data = await response.json();
-          setCurrentUser(data.username || user.user_metadata.username || user.email);
-          setIsLoading(false);
-          return;
-        } catch (err) {
-          console.error(`Attempt ${attempt} failed:`, err);
-          if (attempt === retries) {
-            console.error("Max retries reached, signing out:", err);
-            await supabase.auth.signOut();
-            router.push("/login");
-          } else {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-          }
-        }
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []); // 依存配列が空なので初回レンダリング時のみ実行
+
+  // アプリがフォアグラウンドに戻った際に状態をリフレッシュ
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // アプリがフォアグラウンドに戻った場合、ユーザー情報を再取得
+        checkUser();
       }
     };
 
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  const checkUser = async (retries = 3, delay = 1000) => {
+    setIsLoading(true);
+    setError(null);
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          throw new Error('認証されていません');
+        }
+
+        const response = await fetch("/api/users/me", {
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch user: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        setCurrentUser(data.username || user.user_metadata.username || user.email);
+        setIsLoading(false);
+        return;
+      } catch (err) {
+        console.error(`Attempt ${attempt} failed:`, err);
+        if (attempt === retries) {
+          console.error("Max retries reached, signing out:", err);
+          setError("ユーザー情報の取得に失敗しました。再度お試しください。");
+          setIsLoading(false);
+          await supabase.auth.signOut();
+          router.push("/login");
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+  };
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         checkUser();
@@ -789,6 +837,10 @@ ${input.trim()}
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOnline) {
+      setError("ネットワークに接続されていません。接続を確認してください。");
+      return;
+    }
     if (!sessionStarted) {
       handleStartSession();
     } else {
@@ -856,6 +908,14 @@ ${input.trim()}
           <h2 className="text-lg font-semibold">
             {isLoading ? "読み込み中..." : `こんにちは、${currentUser}さん`}
           </h2>
+          {isLoading && (
+            <button
+              onClick={() => checkUser()}
+              className="mt-2 text-blue-500 hover:underline"
+            >
+              再試行する
+            </button>
+          )}
           <p className="text-gray-500 mt-2">
             哲学者を選択してセッションを開始してください。
           </p>
@@ -868,7 +928,19 @@ ${input.trim()}
         </div>
       )}
 
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+      {error && (
+        <div className="text-red-500 mb-4 flex items-center justify-between">
+          <span>{error}</span>
+          {isOnline && (
+            <button
+              onClick={() => checkUser()}
+              className="text-blue-500 hover:underline"
+            >
+              再試行
+            </button>
+          )}
+        </div>
+      )}
 
       {selectedPhilosopherId && dailyQuestion && (
         <>
@@ -927,12 +999,12 @@ ${input.trim()}
                   placeholder={sessionStarted ? "メッセージを入力..." : "セッションを開始するには入力してください"}
                   className="flex-1 border p-2 rounded-l-md"
                   ref={inputRef}
-                  disabled={loading}
+                  disabled={loading || !isOnline}
                 />
                 <button
                   type="submit"
                   className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-md"
-                  disabled={loading}
+                  disabled={loading || !isOnline}
                   aria-label={sessionStarted ? "メッセージを送信" : "セッションを開始"}
                 >
                   {loading ? "送信中..." : sessionStarted ? "送信" : "開始"}
