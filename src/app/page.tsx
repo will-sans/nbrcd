@@ -83,14 +83,12 @@ export default function Home() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        // Get the current session to retrieve the access token and refresh token
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           console.error(`Attempt ${attempt} - Session error:`, sessionError.message);
           throw new Error(`セッションの取得に失敗しました: ${sessionError.message}`);
         }
 
-        // If no session, check if user is authenticated
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) {
           console.error(`Attempt ${attempt} - User error:`, userError.message);
@@ -100,11 +98,10 @@ export default function Home() {
           throw new Error('認証されていません');
         }
 
-        // Pass both access_token and refresh_token in the headers if session exists
         const headers: HeadersInit = {};
         if (session) {
           headers.Authorization = `Bearer ${session.access_token}`;
-          headers['X-Refresh-Token'] = session.refresh_token; // Send refresh_token in a custom header
+          headers['X-Refresh-Token'] = session.refresh_token;
           console.log(`Attempt ${attempt} - Using session token:`, session.access_token);
           console.log(`Attempt ${attempt} - Using refresh token:`, session.refresh_token);
         } else {
@@ -369,13 +366,12 @@ export default function Home() {
 
   const loadSessionMetadata = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !selectedPhilosopherId) return;
+    if (!user) return;
 
     const { data, error } = await supabase
       .from('user_session_metadata')
       .select('summary, user_inputs, selected_action')
       .eq('user_id', user.id)
-      .eq('philosopher_id', selectedPhilosopherId)
       .order('updated_at', { ascending: false })
       .limit(1)
       .single();
@@ -403,7 +399,7 @@ export default function Home() {
       user_inputs: data.user_inputs || [],
       selected_action: data.selected_action || null,
     });
-  }, [selectedPhilosopherId, supabase]);
+  }, [supabase]);
 
   const generateUserMetadata = async (previousSummary: string, userInputs: string[], selectedAction: string | null, retries = 3) => {
     const prompt = `
@@ -494,12 +490,11 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       .upsert({
         user_id: user.id,
         session_id: sessionId,
-        philosopher_id: selectedPhilosopherId,
         summary: newSummary,
         user_inputs: userInputs,
         selected_action: action,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id, philosopher_id' });
+      }, { onConflict: 'user_id' });
 
     if (error) {
       console.error("Failed to save session metadata to Supabase:", error, "Message:", error.message, "Details:", error.details);
@@ -507,7 +502,6 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       console.log("Successfully saved session metadata to Supabase:", {
         user_id: user.id,
         session_id: sessionId,
-        philosopher_id: selectedPhilosopherId,
         summary: newSummary,
         user_inputs: userInputs,
         selected_action: action,
@@ -518,7 +512,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
   useEffect(() => {
     const checkSession = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !selectedPhilosopherId) return;
+      if (!user) return;
 
       const newSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setSessionId(newSessionId);
@@ -526,7 +520,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
     };
 
     checkSession();
-  }, [selectedPhilosopherId, dailyQuestion?.category, supabase.auth, loadSessionMetadata]);
+  }, [supabase.auth, loadSessionMetadata]);
 
   useEffect(() => {
     if (selectedPhilosopherId) {
@@ -665,7 +659,6 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       return;
     }
 
-    // Step 1: Perform similarity search to find relevant context
     let relevantContext = '';
     try {
       const response = await fetch('/api/similarity-search', {
@@ -681,7 +674,6 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       }
 
       const { results } = await response.json();
-      // Format the top matches to include in the system prompt
       relevantContext = results
         .map((match: SimilaritySearchResult) => 
           `Relevant Quote: "${match.quote}"\nLearning: ${match.learning}\nSource: ${match.book}, ${match.chapter}`
@@ -970,7 +962,7 @@ ${input.trim()}
           </button>
           <button
             onClick={() => router.push("/todo/list")}
-            className="text-gray-600 hover:text-gray-800"
+            className="text-gray-600 jardin hover:text-gray-800"
             aria-label="タスクリストへ移動"
           >
             <FaCheck size={24} />
