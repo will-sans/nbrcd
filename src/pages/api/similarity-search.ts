@@ -1,25 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient, PostgrestError } from '@supabase/supabase-js';
+import { PostgrestError } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { config } from 'dotenv';
-
-// Load environment variables from .env.local
-config({ path: '.env.local' });
+import { createClient } from '@/utils/supabase/server';
 
 // Read environment variables
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
 
 // Validate environment variables
-if (!supabaseUrl || !supabaseKey || !openaiApiKey) {
+if (!openaiApiKey) {
   throw new Error(
-    'Missing required environment variables. Ensure SUPABASE_URL, SUPABASE_SERVICE_KEY, and OPENAI_API_KEY are set in .env.local.'
+    'Missing required environment variable. Ensure OPENAI_API_KEY is set.'
   );
 }
-
-// Initialize Supabase client with service key (bypasses RLS)
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -51,15 +43,16 @@ export default async function handler(
 
   // Validate input
   if (!query || typeof query !== 'string' || query.trim().length < 3) {
-    return res
-      .status(400)
-      .json({
-        error:
-          'Invalid or too short query. Please provide a query with at least 3 characters.',
-      });
+    return res.status(400).json({
+      error:
+        'Invalid or too short query. Please provide a query with at least 3 characters.',
+    });
   }
 
   try {
+    // Initialize Supabase client
+    const supabase = createClient(req, res);
+
     // Step 1: Generate embedding for the user's query
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
@@ -75,7 +68,7 @@ export default async function handler(
         query_embedding: queryEmbedding,
         match_count: 3, // Return top 3 matches
       }
-    )) as { data: SimilaritySearchResult[]; error: PostgrestError | null }; // Specify error type
+    )) as { data: SimilaritySearchResult[]; error: PostgrestError | null };
 
     if (searchError) {
       console.error('Error performing similarity search:', searchError);

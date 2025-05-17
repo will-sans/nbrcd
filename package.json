@@ -16,7 +16,6 @@
     "@supabase/supabase-js": "^2.49.4",
     "chart.js": "^4.4.9",
     "date-fns": "^4.1.0",
-    "dotenv": "^16.5.0",
     "next": "^15.3.2",
     "openai": "^4.100.0",
     "react": "^19.0.0",
