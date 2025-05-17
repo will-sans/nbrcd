@@ -82,13 +82,23 @@ export default function Home() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
+        // Get the current session to retrieve the access token
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          throw new Error('セッションが見つかりません');
+        }
+
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error || !user) {
           throw new Error('認証されていません');
         }
 
+        // Pass the access token in the Authorization header
         const response = await fetch("/api/users/me", {
           signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
         });
 
         clearTimeout(timeoutId);
