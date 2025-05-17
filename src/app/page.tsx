@@ -7,10 +7,11 @@ import { philosophers } from "@/data/philosophers";
 import { questions } from "@/data/questions";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
-import { FaBars, FaCheck, FaTrophy, FaQuestionCircle } from "react-icons/fa";
+import { FaBars, FaCheck, FaTrophy, FaQuestionCircle, FaTimes } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -55,6 +56,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMetadata, setSessionMetadata] = useState<SessionMetadata | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = getSupabaseClient();
@@ -906,6 +908,16 @@ ${input.trim()}
     }
   };
 
+  const handleLogoClick = () => {
+    if (sessionMetadata?.summary) {
+      setIsModalOpen(true);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -925,6 +937,8 @@ ${input.trim()}
               width={40}
               height={40}
               priority
+              onClick={handleLogoClick}
+              className="cursor-pointer"
             />
           </div>
           <div className="w-36">
@@ -962,13 +976,47 @@ ${input.trim()}
           </button>
           <button
             onClick={() => router.push("/todo/list")}
-            className="text-gray-600 jardin hover:text-gray-800"
+            className="text-gray-600 hover:text-gray-800"
             aria-label="タスクリストへ移動"
           >
             <FaCheck size={24} />
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 bg-black z-50"
+              onClick={handleCloseModal}
+            />
+            <motion.div
+              initial={{ y: "-100%", opacity: 0 }}
+              animate={{ y: "0%", opacity: 1 }}
+              exit={{ y: "-100%", opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="fixed top-0 left-6 w-full max-w-2xl bg-white rounded-b-lg shadow-lg z-50 p-6"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">あなたのメタデータ</h2>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-gray-600 hover:text-gray-800"
+                  aria-label="モーダルを閉じる"
+                >
+                  <FaTimes size={20} />
+                </button>
+              </div>
+              <p className="text-gray-700 whitespace-pre-line">{sessionMetadata?.summary}</p>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {!selectedPhilosopherId && (
         <div className="mb-4 p-4 bg-gray-100 rounded text-center">
