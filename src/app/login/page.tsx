@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from '@/utils/supabase/client';
+import { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,17 +14,22 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Error checking user on mount:", error.message);
+      }
       if (user) {
+        console.log("User already logged in on mount:", user);
         router.push("/");
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      console.log("Auth state changed:", event, session);
       if (event === 'SIGNED_IN' && session) {
         router.push("/");
       }
@@ -64,6 +70,14 @@ export default function LoginPage() {
         throw new Error('ログインに失敗しました');
       }
 
+      // Verify the session is set after login
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('セッションの取得に失敗しました');
+      }
+
+      console.log("Login successful, session:", session);
+
       setSuccess("ログインしました！");
       setError(null);
       setEmail("");
@@ -72,6 +86,7 @@ export default function LoginPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
+      console.error("Login error:", err);
     }
   };
 
@@ -114,6 +129,14 @@ export default function LoginPage() {
         throw new Error('ユーザー登録に失敗しました');
       }
 
+      // Verify the session is set after registration
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('セッションの取得に失敗しました');
+      }
+
+      console.log("Registration successful, session:", session);
+
       // ユーザー設定の初期化
       const { error: settingsError } = await supabase
         .from('user_settings')
@@ -138,6 +161,7 @@ export default function LoginPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
+      console.error("Registration error:", err);
     }
   };
 

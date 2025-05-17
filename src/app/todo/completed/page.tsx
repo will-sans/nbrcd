@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaTrophy } from "react-icons/fa";
-import { createClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from '@/utils/supabase/client';
 
 interface Todo {
   id: string;
@@ -24,12 +24,13 @@ export default function CompletedTodoPage() {
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [exitingTodos, setExitingTodos] = useState<Map<string, "restore" | "delete">>(new Map());
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     const fetchCompletedTodos = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Failed to get user:", userError?.message);
         router.push("/login");
         return;
       }
@@ -71,12 +72,24 @@ export default function CompletedTodoPage() {
           return acc;
         }, {});
         setGroupedTodos(grouped);
-      } catch {
-        console.error("Failed to fetch completed todos");
+      } catch (err) {
+        console.error("Failed to fetch completed todos:", err);
+        router.push("/login");
       }
     };
 
     fetchCompletedTodos();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push("/login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   const handleRestoreTodo = async (id: string) => {
@@ -86,9 +99,10 @@ export default function CompletedTodoPage() {
       return newMap;
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
+      router.push("/login");
       return;
     }
 
@@ -117,9 +131,10 @@ export default function CompletedTodoPage() {
       return newMap;
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
+      router.push("/login");
       return;
     }
 

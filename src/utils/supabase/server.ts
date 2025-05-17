@@ -8,20 +8,27 @@ export const createClient = (req: NextApiRequest, res: NextApiResponse) => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies[name];
+        getAll() {
+          return Object.entries(req.cookies)
+            .map(([name, value]) => ({ name, value }))
+            .filter(
+              (cookie): cookie is { name: string; value: string } =>
+                cookie.value !== undefined
+            );
         },
-        set(name: string, value: string, options: CookieOptions) {
-          res.setHeader(
-            'Set-Cookie',
-            `${name}=${value}; Path=${options.path || '/'}; ${options.maxAge ? `Max-Age=${options.maxAge};` : ''} ${options.secure ? 'Secure;' : ''} ${options.httpOnly ? 'HttpOnly;' : ''}`
-          );
-        },
-        remove(name: string, options: CookieOptions) {
-          res.setHeader(
-            'Set-Cookie',
-            `${name}=; Path=${options.path || '/'}; Max-Age=0; ${options.secure ? 'Secure;' : ''} ${options.httpOnly ? 'HttpOnly;' : ''}`
-          );
+        setAll(
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options: CookieOptions;
+          }[]
+        ) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.setHeader(
+              'Set-Cookie',
+              `${name}=${value}; Path=${options.path || '/'}; ${options.maxAge ? `Max-Age=${options.maxAge};` : ''} ${options.secure ? 'Secure;' : ''} ${options.httpOnly ? 'HttpOnly;' : ''}`
+            );
+          });
         },
       },
     }
