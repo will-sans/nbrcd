@@ -7,7 +7,7 @@ import { philosophers } from "@/data/philosophers";
 import { questions } from "@/data/questions";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
-import { FaBars, FaCheck, FaTrophy } from "react-icons/fa";
+import { FaBars, FaCheck, FaTrophy, FaQuestionCircle } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -25,6 +25,17 @@ interface SessionMetadata {
   summary: string;
   user_inputs: string[];
   selected_action: string | null;
+}
+
+interface SimilaritySearchResult {
+  id: number;
+  question: string;
+  learning: string;
+  quote: string;
+  category: string;
+  book: string;
+  chapter: string;
+  similarity: number;
 }
 
 export default function Home() {
@@ -654,6 +665,33 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       return;
     }
 
+    // Step 1: Perform similarity search to find relevant context
+    let relevantContext = '';
+    try {
+      const response = await fetch('/api/similarity-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: input.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Similarity search failed');
+      }
+
+      const { results } = await response.json();
+      // Format the top matches to include in the system prompt
+      relevantContext = results
+        .map((match: SimilaritySearchResult) => 
+          `Relevant Quote: "${match.quote}"\nLearning: ${match.learning}\nSource: ${match.book}, ${match.chapter}`
+        )
+        .join('\n\n');
+    } catch (error) {
+      console.error('Error during similarity search:', error);
+      relevantContext = 'No relevant context found.';
+    }
+
     const userSummary = sessionMetadata?.summary || `${currentUser}さんのメタデータ：まだセッション履歴がありません。`;
 
     const systemPromptWithQuestion = `
@@ -663,6 +701,9 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
 - 以下のメタデータを参考に、ユーザーの傾向や関心を考慮したパーソナライズされた応答を生成してください。
 - ${userSummary}
 - 例：ユーザーのメタデータに「会議の生産性を上げるために議題と目的を明確化しようとしている」とある場合、会議に関する話題が出たらその点を意識して応答してください。
+
+**関連する知識**：
+${relevantContext}
 
 **セッションの目的**：
 - このセッションの目的は、ユーザーが以下の「学び」と「教訓」に会話の中で気づき、それを自身の課題や行動に活かすことです。
@@ -911,21 +952,30 @@ ${input.trim()}
             </select>
           </div>
           <button
+            onClick={() => router.push("/consulting-session")}
+            className="text-gray-600 hover:text-gray-800"
+            aria-label="コンサルティングセッションへ移動"
+          >
+            <FaQuestionCircle size={24} />
+          </button>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
             onClick={() => router.push("/points")}
             className="text-gray-600 hover:text-gray-800"
             aria-label="ポイント履歴を見る"
           >
             <FaTrophy size={24} />
           </button>
+          <button
+            onClick={() => router.push("/todo/list")}
+            className="text-gray-600 hover:text-gray-800"
+            aria-label="タスクリストへ移動"
+          >
+            <FaCheck size={24} />
+          </button>
         </div>
-
-        <button
-          onClick={() => router.push("/todo/list")}
-          className="text-gray-600 hover:text-gray-800"
-          aria-label="タスクリストへ移動"
-        >
-          <FaCheck size={24} />
-        </button>
       </div>
 
       {!selectedPhilosopherId && (
