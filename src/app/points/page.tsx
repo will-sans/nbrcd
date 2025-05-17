@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from '@/utils/supabase/client';
 
 interface PointLog {
   id: string;
@@ -15,12 +15,13 @@ export default function PointsPage() {
   const router = useRouter();
   const [pointLogs, setPointLogs] = useState<PointLog[]>([]);
   const [totalPoints, setTotalPoints] = useState<number>(0);
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     const fetchPointLogs = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Failed to get user:", userError?.message);
         router.push("/login");
         return;
       }
@@ -46,6 +47,17 @@ export default function PointsPage() {
     };
 
     fetchPointLogs();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push("/login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   return (

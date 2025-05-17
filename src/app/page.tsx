@@ -9,7 +9,8 @@ import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
 import { FaBars, FaCheck, FaTrophy, FaQuestionCircle } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
-import { createClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from '@/utils/supabase/client';
+import { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -56,7 +57,7 @@ export default function Home() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -82,33 +83,50 @@ export default function Home() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        // Get the current session to retrieve the access token
+        // Get the current session to retrieve the access token and refresh token
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
-          throw new Error('セッションが見つかりません');
+        if (sessionError) {
+          console.error(`Attempt ${attempt} - Session error:`, sessionError.message);
+          throw new Error(`セッションの取得に失敗しました: ${sessionError.message}`);
         }
 
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) {
+        // If no session, check if user is authenticated
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          console.error(`Attempt ${attempt} - User error:`, userError.message);
+          throw new Error(`ユーザー情報の取得に失敗しました: ${userError.message}`);
+        }
+        if (!user) {
           throw new Error('認証されていません');
         }
 
-        // Pass the access token in the Authorization header
+        // Pass both access_token and refresh_token in the headers if session exists
+        const headers: HeadersInit = {};
+        if (session) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+          headers['X-Refresh-Token'] = session.refresh_token; // Send refresh_token in a custom header
+          console.log(`Attempt ${attempt} - Using session token:`, session.access_token);
+          console.log(`Attempt ${attempt} - Using refresh token:`, session.refresh_token);
+        } else {
+          console.warn(`Attempt ${attempt} - No session found, but user exists:`, user);
+        }
+
         const response = await fetch("/api/users/me", {
           signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers,
         });
 
         clearTimeout(timeoutId);
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Attempt ${attempt} - Fetch error: ${response.status} ${errorText}`);
           throw new Error(`Failed to fetch user: ${response.statusText}`);
         }
 
         const data = await response.json();
-        setCurrentUser(data.username || user.user_metadata.username || user.email);
+        console.log(`Attempt ${attempt} - User data fetched:`, data);
+        setCurrentUser(data.username || data.email || 'ゲスト');
         setIsLoading(false);
         return;
       } catch (err) {
@@ -141,7 +159,8 @@ export default function Home() {
   }, [checkUser]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      console.log("Auth state changed in Home:", event, session);
       if (event === 'SIGNED_IN' && session) {
         checkUser();
       } else if (event === 'SIGNED_OUT' || !session) {

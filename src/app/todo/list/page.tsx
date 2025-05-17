@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaTrophy } from "react-icons/fa";
-import { createClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from '@/utils/supabase/client';
 import { v4 as uuidv4 } from "uuid";
 
 interface Todo {
@@ -15,7 +15,6 @@ interface Todo {
   completedDate?: string;
 }
 
-// Interface for the raw data structure from Supabase (snake_case)
 interface SupabaseTodo {
   id: string;
   text: string;
@@ -36,12 +35,13 @@ export default function TodoListPage() {
   const [dueDate, setDueDate] = useState<string>("");
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     const fetchTodos = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Failed to get user:", userError?.message);
         router.push("/login");
         return;
       }
@@ -52,14 +52,13 @@ export default function TodoListPage() {
           .select('*')
           .eq('user_id', user.id)
           .eq('completed', false)
-          .order('due_date', { ascending: true, nullsFirst: false }) // Sort by due_date first (nulls at the end)
-          .order('date', { ascending: true }); // Then by date
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .order('date', { ascending: true });
 
         if (error) {
           throw new Error(error.message || 'タスクの取得に失敗しました');
         }
 
-        // Map Supabase data (snake_case) to Todo interface (camelCase)
         const mappedData = data?.map((todo: SupabaseTodo) => ({
           id: todo.id,
           text: todo.text,
@@ -72,10 +71,22 @@ export default function TodoListPage() {
         setTodos(mappedData);
       } catch (err) {
         console.error("Failed to fetch todos:", err);
+        router.push("/login");
       }
     };
 
     fetchTodos();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push("/login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   useEffect(() => {
@@ -96,8 +107,8 @@ export default function TodoListPage() {
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
       return;
     }
@@ -123,9 +134,10 @@ export default function TodoListPage() {
   const handleAddTask = async () => {
     if (newTask.trim() === "") return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
+      router.push("/login");
       return;
     }
 
@@ -161,9 +173,10 @@ export default function TodoListPage() {
   const handleToggle = async (id: string) => {
     setCompletedTodos((prev) => [...prev, id]);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
+      router.push("/login");
       return;
     }
 
@@ -195,9 +208,10 @@ export default function TodoListPage() {
   const handleDelete = async (id: string) => {
     setDeletedTodos((prev) => [...prev, id]);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
+      router.push("/login");
       return;
     }
 
@@ -250,9 +264,8 @@ export default function TodoListPage() {
     setSelectedTodoId(id);
     const todo = todos.find((t) => t.id === id);
     if (todo?.dueDate) {
-      // Convert ISO 8601 date (e.g., "2025-05-14T00:00:00.000Z") to YYYY-MM-DD format
       const date = new Date(todo.dueDate);
-      const formattedDate = date.toISOString().split('T')[0]; // Extracts "2025-05-14"
+      const formattedDate = date.toISOString().split('T')[0];
       setDueDate(formattedDate);
     } else {
       setDueDate("");
@@ -262,9 +275,10 @@ export default function TodoListPage() {
   const saveDueDate = async () => {
     if (selectedTodoId === null) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       console.warn('No user found in Supabase Auth');
+      router.push("/login");
       return;
     }
 
@@ -292,7 +306,6 @@ export default function TodoListPage() {
     }
   };
 
-  // Group todos by dueDate (if set) or date, and sort them properly
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
     const dateKey = todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : new Date(todo.date).toLocaleDateString();
     if (!acc[dateKey]) acc[dateKey] = [];
@@ -300,19 +313,15 @@ export default function TodoListPage() {
     return acc;
   }, {});
 
-  // Sort todos within each group by dueDate (if set) or date
   const sortedGroupedTodos = Object.keys(groupedTodos)
     .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
     .reduce((acc: { [key: string]: Todo[] }, dateKey) => {
       acc[dateKey] = groupedTodos[dateKey].sort((a, b) => {
-        // If both have dueDate, sort by dueDate
         if (a.dueDate && b.dueDate) {
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         }
-        // If only one has dueDate, the one with dueDate comes first
         if (a.dueDate) return -1;
         if (b.dueDate) return 1;
-        // If neither has dueDate, sort by date
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
       return acc;

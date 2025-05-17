@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from '@/utils/supabase/client';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -18,23 +18,42 @@ export default function SettingsPage() {
   const [newUsername, setNewUsername] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [showAddToHomeScreen, setShowAddToHomeScreen] = useState(false); // iOSホーム画面追加プロンプト用
+  const [showAddToHomeScreen, setShowAddToHomeScreen] = useState(false);
 
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
     const fetchUserData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Failed to get user:", userError?.message);
         router.push("/login");
         return;
       }
+      console.log("User already logged in on mount:", user);
 
       try {
-        const response = await fetch(`/api/users/me`);
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          console.error("Failed to get session:", sessionError?.message);
+          throw new Error("セッションの取得に失敗しました");
+        }
+
+        const headers: HeadersInit = {
+          Authorization: `Bearer ${session.access_token}`,
+          'X-Refresh-Token': session.refresh_token,
+        };
+
+        const response = await fetch(`/api/users/me`, {
+          headers,
+        });
+
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Failed to fetch user: ${response.status} ${errorText}`);
           throw new Error(`Failed to fetch user: ${response.statusText}`);
         }
+
         const data = await response.json();
         setCurrentUser(data.username);
         setCurrentEmail(data.email);
@@ -48,7 +67,6 @@ export default function SettingsPage() {
       }
     };
 
-    // iOSデバイスでスタンドアロンモードでない場合にプロンプトを表示
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
     if (isIOS && !isStandalone) {
@@ -56,6 +74,17 @@ export default function SettingsPage() {
     }
 
     fetchUserData();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push("/login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   const handleLogout = async () => {
@@ -220,7 +249,6 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
-      {/* 左上の閉じるボタンと右上のメニューアイコン */}
       <div className="absolute top-4 left-4">
         <button
           onClick={() => router.push("/")}
@@ -268,7 +296,6 @@ export default function SettingsPage() {
 
       <h1 className="text-2xl font-bold mb-4 text-center">設定</h1>
 
-      {/* ユーザー情報セクション */}
       <div className="mb-6 p-4 border rounded bg-gray-100">
         <h2 className="text-xl font-bold mb-2">ユーザー情報</h2>
         {isLoading ? (
@@ -309,7 +336,6 @@ export default function SettingsPage() {
         {success && <div className="text-green-500 mb-4">{success}</div>}
       </div>
 
-      {/* メニュー（ログアウトとデータ削除） */}
       {showMenu && (
         <div className="fixed inset-x-0 bottom-0 bg-white shadow-lg p-4 flex flex-col space-y-4 animate-slide-up">
           <button
@@ -335,7 +361,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ユーザー名変更モーダル */}
       {showUsernameModal && (
         <div className="fixed inset-x-0 bottom-0 bg-white shadow-lg p-4 animate-slide-up">
           <h2 className="text-xl font-bold mb-2">ユーザー名を変更</h2>
@@ -368,7 +393,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* メールアドレスとパスワード変更モーダル */}
       {showEmailPasswordModal && (
         <div className="fixed inset-x-0 bottom-0 bg-white shadow-lg p-4 animate-slide-up">
           <h2 className="text-xl font-bold mb-2">メールアドレスとパスワードを変更</h2>
@@ -409,7 +433,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* パスワード変更モーダル */}
       {showPasswordModal && (
         <div className="fixed inset-x-0 bottom-0 bg-white shadow-lg p-4 animate-slide-up">
           <h2 className="text-xl font-bold mb-2">パスワードを変更</h2>
@@ -442,7 +465,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* iOS向けホーム画面追加プロンプト */}
       {showAddToHomeScreen && (
         <div className="fixed bottom-4 left-4 right-4 p-4 bg-blue-100 border border-blue-300 rounded-lg shadow-lg">
           <p className="text-sm">

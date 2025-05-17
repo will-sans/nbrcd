@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaArrowLeft } from "react-icons/fa";
 
 interface Message {
@@ -29,9 +29,8 @@ export default function ConsultingSession() {
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const inputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
 
-  // Check online status
   useEffect(() => {
     setIsOnline(navigator.onLine);
 
@@ -47,16 +46,28 @@ export default function ConsultingSession() {
     };
   }, []);
 
-  // Check user authentication
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Failed to get user:", userError?.message);
         router.push("/login");
+        return;
       }
     };
 
     checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event, session);
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push("/login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,6 +85,13 @@ export default function ConsultingSession() {
       return;
     }
 
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("Failed to get user:", userError?.message);
+      router.push("/login");
+      return;
+    }
+
     const newUserMessage: Message = {
       role: "user",
       content: input.trim(),
@@ -85,13 +103,20 @@ export default function ConsultingSession() {
     setError(null);
 
     try {
-      // Step 1: Perform similarity search to find relevant context
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error("Failed to get session:", sessionError?.message);
+        throw new Error("セッションの取得に失敗しました");
+      }
+
       let relevantContext = '';
       try {
         const response = await fetch('/api/similarity-search', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+            'X-Refresh-Token': session.refresh_token,
           },
           body: JSON.stringify({ query: input.trim() }),
         });
@@ -101,7 +126,6 @@ export default function ConsultingSession() {
         }
 
         const { results } = await response.json();
-        // Format the top matches to include in the system prompt
         relevantContext = results
           .map((match: SimilaritySearchResult) =>
             `Relevant Quote: "${match.quote}"\nLearning: ${match.learning}\nSource: ${match.book}, ${match.chapter}`
@@ -112,7 +136,6 @@ export default function ConsultingSession() {
         relevantContext = 'No relevant context found.';
       }
 
-      // Step 2: Construct the system prompt with the relevant context
       const systemPrompt = `
 あなたは哲学者として、ユーザーの悩みや課題に対して深い洞察を提供するプロフェッショナルなコンサルタントです。
 ユーザーの入力に基づき、関連する哲学的知識を引用し、実践的なアドバイスを提供してください。
@@ -144,7 +167,6 @@ ${input.trim()}
 
       const messagesWithSystem = [systemMessage, ...updatedMessages];
 
-      // Step 3: Send the query to the GPT API
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -152,6 +174,8 @@ ${input.trim()}
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({
           model: "gpt-4o",
@@ -198,7 +222,7 @@ ${input.trim()}
           <FaArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-semibold">コンサルティングセッション</h1>
-        <div className="w-6"></div> {/* Spacer for alignment */}
+        <div className="w-6"></div>
       </div>
 
       {error && (

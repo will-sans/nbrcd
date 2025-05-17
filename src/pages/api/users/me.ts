@@ -10,24 +10,41 @@ export default async function handler(
   }
 
   try {
-    // Get the Authorization header
+    // Get the Authorization header and refresh token
     const authHeader = req.headers.authorization;
+    const refreshToken = req.headers['x-refresh-token'] as string;
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '認証トークンがありません' });
+      console.error('No Authorization header provided or invalid format');
+      return res
+        .status(401)
+        .json({ error: '認証トークンが提供されていません' });
+    }
+
+    if (!refreshToken) {
+      console.error('No refresh token provided');
+      return res
+        .status(401)
+        .json({ error: 'リフレッシュトークンが提供されていません' });
     }
 
     const token = authHeader.split(' ')[1]; // Extract the token from "Bearer <token>"
+    // console.log('Received access token:', token);
+    // console.log('Received refresh token:', refreshToken);
 
-    // Initialize Supabase client with the token
+    // Initialize Supabase client
     const supabase = createClient(req, res);
 
-    // Set the auth token for the Supabase client
+    // Set the auth session with both access_token and refresh_token
     const { error: setAuthError } = await supabase.auth.setSession({
       access_token: token,
-      refresh_token: '',
+      refresh_token: refreshToken,
     });
     if (setAuthError) {
-      return res.status(401).json({ error: 'トークンの設定に失敗しました' });
+      console.error('Failed to set session:', setAuthError.message);
+      return res.status(401).json({
+        error: 'トークンの設定に失敗しました: ' + setAuthError.message,
+      });
     }
 
     // Get the user
@@ -37,8 +54,15 @@ export default async function handler(
     } = await supabase.auth.getUser();
 
     if (error || !user) {
-      return res.status(401).json({ error: '認証されていません' });
+      console.error('Failed to get user:', error?.message || 'No user found');
+      return res.status(401).json({
+        error:
+          '認証されていません: ' +
+          (error?.message || 'ユーザー情報が見つかりません'),
+      });
     }
+
+    //console.log('User fetched successfully:', user);
 
     res.status(200).json({
       id: user.id,
@@ -47,6 +71,10 @@ export default async function handler(
     });
   } catch (error) {
     console.error('Failed to fetch user:', error);
-    res.status(500).json({ error: 'ユーザー情報の取得に失敗しました' });
+    res.status(500).json({
+      error:
+        'ユーザー情報の取得に失敗しました: ' +
+        (error instanceof Error ? error.message : String(error)),
+    });
   }
 }
