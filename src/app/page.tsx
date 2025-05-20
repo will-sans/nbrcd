@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { philosophers } from "@/data/philosophers";
-import { questions } from "@/data/questions";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
 import { FaBars, FaCheck, FaTrophy, FaQuestionCircle, FaTimes } from "react-icons/fa";
@@ -524,13 +523,38 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
     checkSession();
   }, [supabase.auth, loadSessionMetadata]);
 
+  const fetchQuestions = useCallback(async (philosophy: string): Promise<Question[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('id, philosophy, question, learning, quote, title, intro, call_to_action, book, chapter, category')
+        .eq('philosophy', philosophy)
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error("Failed to fetch questions from Supabase:", error);
+        setError("質問の取得に失敗しました。");
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error("Error fetching questions:", err);
+      setError("質問の取得中にエラーが発生しました。");
+      return [];
+    }
+  }, [supabase, setError]);
+
   useEffect(() => {
     if (selectedPhilosopherId) {
-      const philosopherQuestions = questions
-        .filter((q) => q.philosophy === selectedPhilosopherId)
-        .sort((a, b) => a.id - b.id);
+      loadLastQuestionId(selectedPhilosopherId).then(async (lastId) => {
+        const philosopherQuestions = await fetchQuestions(selectedPhilosopherId);
+        if (philosopherQuestions.length === 0) {
+          setError("選択した哲学者の質問が見つかりません。");
+          setDailyQuestion(null);
+          return;
+        }
 
-      loadLastQuestionId(selectedPhilosopherId).then((lastId) => {
         let nextQuestion = philosopherQuestions.find((q) => q.id > lastId);
         if (!nextQuestion) {
           nextQuestion = philosopherQuestions[0];
@@ -543,7 +567,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         setSelectedAction(null);
       });
     }
-  }, [selectedPhilosopherId, loadLastQuestionId]);
+  }, [selectedPhilosopherId, loadLastQuestionId, fetchQuestions]);
 
   const saveLog = async (action: string, details?: Record<string, string>) => {
     const { data: { user } } = await supabase.auth.getUser();
