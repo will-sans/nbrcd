@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -153,21 +154,15 @@ export default function CompletedTodoPage() {
     }
   };
 
+  const handleRowClick = (todo: Todo) => {
+    router.push(`/diary?todo_id=${todo.id}&task_content=${encodeURIComponent(todo.text)}&completed_date=${encodeURIComponent(todo.completed_date || '')}`);
+  };
+
   const onTransitionEnd = (id: string) => {
     const action = exitingTodos.get(id);
     if (!action) return;
 
-    if (action === "restore") {
-      setCompletedTodos(completedTodos.filter((todo) => todo.id !== id));
-      const updatedGrouped = { ...groupedTodos };
-      for (const date in updatedGrouped) {
-        updatedGrouped[date] = updatedGrouped[date].filter((todo) => todo.id !== id);
-        if (updatedGrouped[date].length === 0) {
-          delete updatedGrouped[date];
-        }
-      }
-      setGroupedTodos(updatedGrouped);
-    } else if (action === "delete") {
+    if (action === "restore" || action === "delete") {
       setCompletedTodos(completedTodos.filter((todo) => todo.id !== id));
       const updatedGrouped = { ...groupedTodos };
       for (const date in updatedGrouped) {
@@ -204,8 +199,6 @@ export default function CompletedTodoPage() {
     const offset = swipeStates[id] || 0;
     if (offset < -50) {
       setSwipeStates((prev) => ({ ...prev, [id]: -80 }));
-    } else if (offset > -30) {
-      setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     } else {
       setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     }
@@ -244,7 +237,7 @@ export default function CompletedTodoPage() {
               {todos.map((todo) => (
                 <li
                   key={todo.id}
-                  className="relative transition-all duration-300 ease-in-out"
+                  className="relative transition-all duration-300 ease-in-out cursor-pointer"
                   style={{
                     opacity: exitingTodos.has(todo.id) ? 0 : 1,
                     transform: exitingTodos.has(todo.id)
@@ -258,6 +251,7 @@ export default function CompletedTodoPage() {
                       onTransitionEnd(todo.id);
                     }
                   }}
+                  onClick={() => handleRowClick(todo)}
                 >
                   <div className="flex items-center bg-gray-100 p-2 rounded overflow-hidden">
                     <div
@@ -290,7 +284,10 @@ export default function CompletedTodoPage() {
                     </div>
                     <div className="absolute right-0 h-full flex items-center">
                       <button
-                        onClick={() => handleDeleteTodo(todo.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTodo(todo.id);
+                        }}
                         className="bg-red-500 text-white h-full px-4 py-2"
                         style={{
                           display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none",
