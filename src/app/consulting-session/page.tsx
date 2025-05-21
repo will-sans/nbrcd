@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaArrowLeft } from "react-icons/fa";
+import { getPromptById } from "@/utils/supabase/prompts";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -28,6 +29,8 @@ export default function ConsultingSession() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [promptMode, setPromptMode] = useState<string>("concise"); // Default mode
+  const [sessionStarted, setSessionStarted] = useState<boolean>(false); // Track session start
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = getSupabaseClient();
 
@@ -101,6 +104,7 @@ export default function ConsultingSession() {
     setInput("");
     setLoading(true);
     setError(null);
+    setSessionStarted(true); // Lock mode after first message
 
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -136,29 +140,33 @@ export default function ConsultingSession() {
         relevantContext = 'No relevant context found.';
       }
 
-      const systemPrompt = `
-あなたは経営哲学に基づき、ユーザーの悩みや課題に対して深い洞察を提供するプロフェッショナルなコンサルタントです。
-ユーザーの入力に基づき、関連する経営哲学的知識を引用し、実践的なアドバイスを提供してください。
-以下のガイドラインに従ってください：
+      // Fetch prompt based on mode
+      const promptIdMap: { [key: string]: number } = {
+        concise: 1,
+        conversational: 2,
+        detailed: 3,
+      };
+      const prompt = await getPromptById(supabase, promptIdMap[promptMode]);
+      if (!prompt) {
+        throw new Error('プロンプトの読み込みに失敗しました: ' + promptMode);
+      }
 
-**関連する知識**：
-${relevantContext}
+      // Fetch user summary from user_session_metadata
+      const { data: metadata } = await supabase
+        .from('user_session_metadata')
+        .select('summary')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
 
-1. **応答の構造**：
-   - 応答は3文で構成してください。
-   - 1文目はユーザーの感情や課題に共感する内容、
-   - 2文目は関連する哲学的知識や引用を基にした洞察を提供する内容、
-   - 3文目はユーザーに次のステップを考えさせる質問とする。
-   - 例：
-     その悩み、とてもよくわかります。ピーター・ドラッカーは「時間を制する者だけが、自らの成果を制することができる」と言っています。この考えをどのように活かせそうですか？
+      const userSummary = metadata?.summary || `${user.email}さんのメタデータ：まだセッション履歴がありません。`;
 
-2. **自然な会話**：
-   - 定型的な応答を避け、自然な会話の流れを維持してください。
-   - ユーザーの入力に応じて柔軟に対応し、対話を深める方向に進めてください。
-
-**ユーザー入力**：
-${input.trim()}
-`;
+      // Replace placeholders in prompt
+      const systemPrompt = prompt.prompt_text
+        .replace('{{relevantContext}}', relevantContext)
+        .replace('{{userSummary}}', userSummary)
+        .replace('{{userInput}}', input.trim());
 
       const systemMessage: Message = {
         role: "system",
@@ -193,7 +201,11 @@ ${input.trim()}
       }
 
       const data = await response.json();
-      const reply = data.choices[0]?.message?.content || "";
+      console.log('Full API Response:', JSON.stringify(data, null, 2));
+      if (!data.choices || !data.choices[0]?.message?.content) {
+        throw new Error('Empty or invalid response from chat API');
+      }
+      const reply = data.choices[0].message.content;
       console.log("Response:", reply);
 
       const newAssistantMessage: Message = {
@@ -222,7 +234,18 @@ ${input.trim()}
           <FaArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-semibold">コンサルティングセッション</h1>
-        <div className="w-6"></div>
+        <div className="w-36">
+          <select
+            value={promptMode}
+            onChange={(e) => setPromptMode(e.target.value)}
+            disabled={sessionStarted} // Disable after first message
+            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-gray-200"
+          >
+            <option value="concise">簡潔な洞察</option>
+            <option value="conversational">会話形式</option>
+            <option value="detailed">詳細なコンサル</option>
+          </select>
+        </div>
       </div>
 
       {error && (

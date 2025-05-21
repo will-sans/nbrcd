@@ -302,21 +302,24 @@ export default function Home() {
   }, [supabase, savePoints]);
 
   const extractActions = (reply: string, assistantReplyCount: number): { updatedReply: string; actions: string[] } => {
-    const actionPlanMatch = reply.match(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/);
+    console.log('Extracting actions from reply:', reply);
+    const actionPlanMatch = reply.match(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/);
     let updatedReply = reply;
     let actions: string[] = [];
 
     const shouldRemoveQuestions = assistantReplyCount >= 3 && actionPlanMatch;
 
     if (actionPlanMatch) {
-      updatedReply = reply.replace(/1\. \[.*\], 2\. \[.*\], 3\. \[.*\]/, "").trim();
-      const parts = updatedReply.split("まとめ：");
+      updatedReply = reply.replace(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/, "").trim();
+      // Clean up any literal \n\n or extra newlines
+      updatedReply = updatedReply.replace(/\\n\\n/g, '\n\n').trim();
+      const parts = updatedReply.split("\n\nまとめ：");
       let beforeSummary = parts[0]?.trim() || "";
       let summaryPart = parts[1]?.trim() || "";
 
       if (shouldRemoveQuestions) {
         if (beforeSummary) {
-          const beforeSentences = beforeSummary.split("。").filter((s) => s.trim() !== "");
+          const beforeSentences = beforeSummary.split("。").filter((s: string) => s.trim() !== "");
           if (beforeSentences.length > 0 && beforeSentences[beforeSentences.length - 1].trim().endsWith("？")) {
             beforeSentences.pop();
           }
@@ -327,7 +330,7 @@ export default function Home() {
         }
 
         if (summaryPart) {
-          const summarySentences = summaryPart.split("。").filter((s) => s.trim() !== "");
+          const summarySentences = summaryPart.split("。").filter((s: string) => s.trim() !== "");
           if (summarySentences.length > 0 && summarySentences[summarySentences.length - 1].trim().endsWith("？")) {
             summarySentences.pop();
           }
@@ -345,10 +348,11 @@ export default function Home() {
 
       const actionsText = actionPlanMatch[0];
       actions = actionsText.split(", ").map((action) =>
-        action.replace(/^\d+\.\s/, "").replace(/^\[|\]$/g, "").trim()
+        action.replace(/^\d+\.\s*/, "").replace(/^\[|\]$/g, "").trim()
       );
     } else if (shouldRemoveQuestions) {
-      const sentences = updatedReply.split("。").filter((s) => s.trim() !== "");
+      console.log('No action plan matched, removing questions');
+      const sentences = updatedReply.split("。").filter((s: string) => s.trim() !== "");
       if (sentences.length > 0 && sentences[sentences.length - 1].trim().endsWith("？")) {
         sentences.pop();
       }
@@ -358,6 +362,7 @@ export default function Home() {
       }
     }
 
+    console.log('Extracted actions:', actions);
     return { updatedReply, actions };
   };
 
@@ -446,7 +451,11 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         }
 
         const data = await response.json();
-        const generatedSummary = data.choices[0]?.message?.content || "";
+        console.log('Full Metadata API Response:', JSON.stringify(data, null, 2));
+        if (!data.choices || !data.choices[0]?.message?.content) {
+          throw new Error('Empty or invalid response from metadata API');
+        }
+        const generatedSummary = data.choices[0].message.content;
         console.log(`Attempt ${attempt}: Successfully generated metadata:`, generatedSummary);
         return generatedSummary;
       } catch (error: unknown) {
@@ -475,7 +484,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
 
     const userInputs = messages
       .filter((m) => m.role === "user")
-      .map((m) => m.content);
+      .map((m) => m.content.replace(/\nまとめ$/, '').trim()); // Remove "まとめ" from stored inputs
 
     const previousSummary = sessionMetadata?.summary || "";
     let newSummary = previousSummary;
@@ -628,37 +637,50 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
 
   const saveActionToLocalStorageAndRedirect = async (action: string) => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('todos')
-      .insert({
-        id: uuidv4(),
-        user_id: user.id,
-        text: action,
-        completed: false,
-        date: new Date().toISOString(),
-      });
-
-    if (error) {
-      console.error("Failed to save todo:", error);
+    if (!user) {
+      console.error('No user found for todo insertion');
+      setError('ユーザーが見つかりません。ログインしてください。');
       return;
     }
 
-    await saveLog("end_session", { action: "Session ended after action plan selection" });
+    try {
+      console.log('Saving todo:', { action, userId: user.id });
+      const { error } = await supabase
+        .from('todos')
+        .insert({
+          id: uuidv4(),
+          user_id: user.id,
+          text: action,
+          completed: false,
+          date: new Date().toISOString(),
+        });
 
-    saveSessionMetadata(action).catch((err) => {
-      console.error("Failed to save session metadata in background:", err);
-    });
+      if (error) {
+        console.error("Failed to save todo:", error);
+        setError('タスクの保存に失敗しました。');
+        return;
+      }
 
-    if (selectedPhilosopherId && dailyQuestion) {
-      await saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
+      console.log('Todo saved successfully:', action);
+      await saveLog("end_session", { action: "Session ended after action plan selection" });
+
+      saveSessionMetadata(action).catch((err) => {
+        console.error("Failed to save session metadata in background:", err);
+      });
+
+      if (selectedPhilosopherId && dailyQuestion) {
+        await saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
+      }
+
+      router.push("/todo/list");
+    } catch (err) {
+      console.error("Error saving todo:", err);
+      setError('タスクの保存中にエラーが発生しました。');
     }
-
-    router.push("/todo/list");
   };
 
   const handleActionSelect = (action: string) => {
+    console.log('Action selected:', action);
     setSelectedAction(action);
     savePoints("action_select", 10);
     saveActionToLocalStorageAndRedirect(action);
@@ -751,9 +773,7 @@ ${relevantContext}
      - 1. [行動1], 2. [行動2], 3. [行動3]
    - アクションプランは、上記の「学び」と「教訓」に基づき、ユーザーが「やるべきこと」を見極めて行動に移せる内容にしてください。
    - 例：
-     ここまでの対話で、時間管理の課題が見えてきましたね。\n\n
-     まとめ：これまでの対話を通じて、時間管理の重要性について深く考えることができました。
-     1. [毎朝5分間の瞑想を行う], 2. [週末に1時間読書する], 3. [1日1回感謝の気持ちを伝える]
+     \n\nまとめ：これまでの対話を通じて、時間管理の重要性について深く考えることができました。\n1. [毎朝5分間の瞑想を行う], 2. [週末に1時間読書する], 3. [1日1回感謝の気持ちを伝える]
 
 **質問：**
 ${dailyQuestion.question}
@@ -807,7 +827,11 @@ ${input.trim()}
       }
 
       const data = await response.json();
-      let reply = data.choices[0]?.message?.content || "";
+      console.log('Full API Response:', JSON.stringify(data, null, 2));
+      if (!data.choices || !data.choices[0]?.message?.content) {
+        throw new Error('Empty or invalid response from chat API');
+      }
+      let reply = data.choices[0].message.content;
       console.log("Response:", reply);
 
       const assistantReplyCount = messages.filter((m) => m.role === "assistant").length + 1;
@@ -847,9 +871,12 @@ ${input.trim()}
       return;
     }
 
+    const userInputCount = messages.filter((m) => m.role === "user").length + 1;
+    const inputToSend = userInputCount === 3 ? `${input.trim()}\nまとめ` : input.trim();
+
     const newUserMessage: Message = {
       role: "user",
-      content: input.trim(),
+      content: input.trim(), // Store original input for UI
     };
     const updatedMessages = [...messages, newUserMessage];
     setMessages(updatedMessages);
@@ -857,11 +884,17 @@ ${input.trim()}
     setLoading(true);
     setError(null);
 
-    await saveLog("send_message", { input: input.trim() });
+    await saveLog("send_message", { input: inputToSend });
 
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      // Use inputToSend for the model, including "まとめ" if third input
+      const messagesForModel = [
+        ...messages,
+        { role: "user", content: inputToSend }
+      ];
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -870,7 +903,7 @@ ${input.trim()}
         },
         body: JSON.stringify({
           model: "gpt-4o",
-          messages: systemMessage ? [systemMessage, ...updatedMessages] : updatedMessages,
+          messages: systemMessage ? [systemMessage, ...messagesForModel] : messagesForModel,
           temperature: 0.3,
         }),
         signal: controller.signal,
@@ -884,7 +917,11 @@ ${input.trim()}
       }
 
       const data = await response.json();
-      let reply = data.choices[0]?.message?.content || "";
+      console.log('Full API Response:', JSON.stringify(data, null, 2));
+      if (!data.choices || !data.choices[0]?.message?.content) {
+        throw new Error('Empty or invalid response from chat API');
+      }
+      let reply = data.choices[0].message.content;
       console.log("Response:", reply);
 
       const assistantReplyCount = messages.filter((m) => m.role === "assistant").length + 1;
@@ -1072,10 +1109,10 @@ ${input.trim()}
           <span>{error}</span>
           {isOnline && (
             <button
-              onClick={() => checkUser()}
+              onClick={() => setError(null)}
               className="text-blue-500 hover:underline"
             >
-              再試行
+              閉じる
             </button>
           )}
         </div>
