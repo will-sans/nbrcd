@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+NBRCD
+NBRCD is a web application that helps users form actionable habits through sessions inspired by business philosophies (e.g., Drucker, Matsushita, Inamori). Users engage in guided conversations, receive action plans, and save tasks to a todo list.
+Features
 
-## Getting Started
+Concise Mode (/): Generates a summary and action plan (1. [Action], 2. [Action], 3. [Action]) after three user inputs, with "まとめ" appended internally (hidden from UI).
+Consulting Session (/consulting-session): Supports concise, conversational, and detailed modes, with mode selection disabled after the first message.
+Todo List (/todo/list): Displays tasks saved from action plans, grouped by date, with completion and deletion functionality.
 
-First, run the development server:
+Tech Stack
 
-```bash
+Frontend: Next.js 15.3.2, TypeScript, React
+Backend: Supabase (PostgreSQL)
+Styling: Tailwind CSS
+Icons: React Icons
+
+Prerequisites
+
+Node.js (v18 or higher)
+Supabase account and project
+.env.local with Supabase credentials:NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+
+
+
+Setup
+
+Clone the Repository:
+git clone <repository-url>
+cd nbrcd
+
+
+Install Dependencies:
+npm install
+
+
+Configure Supabase:
+
+Create a Supabase project and note the URL and anon key.
+Set up tables: todos, user_session_metadata, prompts, questions, user_settings, point_logs, sessions.
+Configure Row-Level Security (RLS) policies:CREATE POLICY insert_todos ON public.todos FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY select_todos ON public.todos FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+
+Add prompts to prompts table:
+ID 1: Consulting concise
+ID 2: Consulting conversational
+ID 3: Consulting detailed
+ID 4: Home concise
+
+
+
+
+Run Locally:
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Build and Deploy
 
-## Learn More
+Build:npm run build
 
-To learn more about Next.js, take a look at the following resources:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Start:npm run start
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+Deploy to Vercel or another platform, ensuring .env variables are set.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Usage
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Home (/):
+Select a philosopher (e.g., Drucker).
+Input three queries to receive a summary and action plan.
+Select an action to save it as a task in /todo/list.
+
+
+Consulting Session (/consulting-session):
+Choose a mode before sending the first message (concise, conversational, detailed).
+Mode locks after the first message.
+Input queries to receive responses tailored to the mode.
+
+
+Todo List (/todo/list):
+View, complete, or delete tasks grouped by date.
+
+
+
+Troubleshooting
+
+Supabase Errors: Verify RLS policies and table schemas.
+Build Errors: Ensure ESLint rules are satisfied (npm run build).
+Mode Issues: Check prompt IDs in prompts table and promptIdMap in app/consulting-session/page.tsx.
+
+Contributing
+
+Fork the repository.
+Create a feature branch (git checkout -b feature/xyz).
+Commit changes (git commit -m "Add xyz feature").
+Push and create a pull request.
+
+License
+MIT License
