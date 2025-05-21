@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaTrophy } from "react-icons/fa";
+import { FaBook } from "react-icons/fa";
 import { getSupabaseClient } from '@/utils/supabase/client';
 
 interface Todo {
@@ -22,6 +21,7 @@ export default function CompletedTodoPage() {
   const router = useRouter();
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([]);
   const [groupedTodos, setGroupedTodos] = useState<GroupedTodos>({});
+  const [loggedTodoIds, setLoggedTodoIds] = useState<Set<string>>(new Set());
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [exitingTodos, setExitingTodos] = useState<Map<string, "restore" | "delete">>(new Map());
@@ -37,20 +37,33 @@ export default function CompletedTodoPage() {
       }
 
       try {
-        const { data, error } = await supabase
+        const { data: todos, error: todosError } = await supabase
           .from('todos')
           .select('*')
           .eq('user_id', user.id)
           .eq('completed', true)
           .order('completed_date', { ascending: false });
 
-        if (error) {
-          throw new Error(error.message || '完了済みタスクの取得に失敗しました');
+        if (todosError) {
+          throw new Error(todosError.message || '完了済みタスクの取得に失敗しました');
         }
 
-        setCompletedTodos(data || []);
+        setCompletedTodos(todos || []);
 
-        const grouped = (data || []).reduce((acc: GroupedTodos, todo: Todo) => {
+        const { data: workLogs, error: logsError } = await supabase
+          .from('work_logs')
+          .select('todo_id')
+          .eq('user_id', user.id)
+          .not('todo_id', 'is', null);
+
+        if (logsError) {
+          console.error("Failed to fetch work logs:", logsError);
+        } else {
+          const loggedIds = new Set(workLogs?.map(log => log.todo_id) || []);
+          setLoggedTodoIds(loggedIds);
+        }
+
+        const grouped = (todos || []).reduce((acc: GroupedTodos, todo: Todo) => {
           let completedDateStr = "不明な日付";
           if (todo.completed_date) {
             try {
@@ -94,6 +107,11 @@ export default function CompletedTodoPage() {
   }, [router, supabase]);
 
   const handleRestoreTodo = async (id: string) => {
+    if (loggedTodoIds.has(id)) {
+      alert("作業日誌が登録されているタスクは復元できません");
+      return;
+    }
+
     setExitingTodos((prev) => {
       const newMap = new Map(prev);
       newMap.set(id, "restore");
@@ -126,6 +144,11 @@ export default function CompletedTodoPage() {
   };
 
   const handleDeleteTodo = async (id: string) => {
+    if (loggedTodoIds.has(id)) {
+      alert("作業日誌が登録されているタスクは削除できません");
+      return;
+    }
+
     setExitingTodos((prev) => {
       const newMap = new Map(prev);
       newMap.set(id, "delete");
@@ -181,11 +204,13 @@ export default function CompletedTodoPage() {
     });
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleTouchStart = (e: React.TouchEvent, todoId: string) => {
+    if (loggedTodoIds.has(todoId)) return;
     setTouchStartX(e.touches[0].clientX);
   };
 
   const handleTouchMove = (id: string, e: React.TouchEvent) => {
+    if (loggedTodoIds.has(id)) return;
     if (touchStartX === null) return;
     const touchX = e.touches[0].clientX;
     const deltaX = touchX - touchStartX;
@@ -196,6 +221,7 @@ export default function CompletedTodoPage() {
   };
 
   const handleTouchEnd = (id: string) => {
+    if (loggedTodoIds.has(id)) return;
     const offset = swipeStates[id] || 0;
     if (offset < -50) {
       setSwipeStates((prev) => ({ ...prev, [id]: -80 }));
@@ -217,11 +243,11 @@ export default function CompletedTodoPage() {
         </button>
         <h1 className="text-2xl font-bold">完了済み</h1>
         <button
-          onClick={() => router.push("/points")}
-          className="text-gray-600 hover:text-gray-800 text-2xl"
-          aria-label="ポイント履歴を見る"
+          onClick={() => router.push("/diary/list")}
+          className="text-gray-600 hover:text-gray-800"
+          aria-label="作業日誌一覧を見る"
         >
-          <FaTrophy size={24} />
+          <FaBook size={24} />
         </button>
       </div>
 
@@ -237,7 +263,7 @@ export default function CompletedTodoPage() {
               {todos.map((todo) => (
                 <li
                   key={todo.id}
-                  className="relative transition-all duration-300 ease-in-out cursor-pointer"
+                  className={`relative transition-all duration-300 ease-in-out ${loggedTodoIds.has(todo.id) ? 'cursor-default' : 'cursor-pointer'}`}
                   style={{
                     opacity: exitingTodos.has(todo.id) ? 0 : 1,
                     transform: exitingTodos.has(todo.id)
@@ -251,16 +277,16 @@ export default function CompletedTodoPage() {
                       onTransitionEnd(todo.id);
                     }
                   }}
-                  onClick={() => handleRowClick(todo)}
+                  onClick={() => !loggedTodoIds.has(todo.id) && handleRowClick(todo)}
                 >
-                  <div className="flex items-center bg-gray-100 p-2 rounded overflow-hidden">
+                  <div className={`flex items-center ${loggedTodoIds.has(todo.id) ? 'bg-gray-300' : 'bg-gray-100'} p-2 rounded overflow-hidden`}>
                     <div
                       className="flex items-center w-full"
                       style={{
                         transform: `translateX(${swipeStates[todo.id] || 0}px)`,
                         transition: "transform 0.3s ease",
                       }}
-                      onTouchStart={handleTouchStart}
+                      onTouchStart={(e) => handleTouchStart(e, todo.id)}
                       onTouchMove={(e) => handleTouchMove(todo.id, e)}
                       onTouchEnd={() => handleTouchEnd(todo.id)}
                     >
@@ -269,6 +295,7 @@ export default function CompletedTodoPage() {
                         checked={true}
                         onChange={() => handleRestoreTodo(todo.id)}
                         className="mr-2"
+                        disabled={loggedTodoIds.has(todo.id)}
                       />
                       <div className="flex-1">
                         <span className="line-through">{todo.text}</span>
@@ -282,20 +309,22 @@ export default function CompletedTodoPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="absolute right-0 h-full flex items-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTodo(todo.id);
-                        }}
-                        className="bg-red-500 text-white h-full px-4 py-2"
-                        style={{
-                          display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none",
-                        }}
-                      >
-                        削除
-                      </button>
-                    </div>
+                    {!loggedTodoIds.has(todo.id) && (
+                      <div className="absolute right-0 h-full flex items-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTodo(todo.id);
+                          }}
+                          className="bg-red-500 text-white h-full px-4 py-2"
+                          style={{
+                            display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none",
+                          }}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
