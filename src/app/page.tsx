@@ -67,7 +67,7 @@ export default function Home() {
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    window.removeEventListener("offline", handleOffline);
 
     return () => {
       window.removeEventListener("online", handleOnline);
@@ -311,7 +311,6 @@ export default function Home() {
 
     if (actionPlanMatch) {
       updatedReply = reply.replace(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/, "").trim();
-      // Clean up any literal \n\n or extra newlines
       updatedReply = updatedReply.replace(/\\n\\n/g, '\n\n').trim();
       const parts = updatedReply.split("\n\nまとめ：");
       let beforeSummary = parts[0]?.trim() || "";
@@ -484,7 +483,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
 
     const userInputs = messages
       .filter((m) => m.role === "user")
-      .map((m) => m.content.replace(/\nまとめ$/, '').trim()); // Remove "まとめ" from stored inputs
+      .map((m) => m.content.replace(/\nまとめ$/, '').trim());
 
     const previousSummary = sessionMetadata?.summary || "";
     let newSummary = previousSummary;
@@ -876,7 +875,7 @@ ${input.trim()}
 
     const newUserMessage: Message = {
       role: "user",
-      content: input.trim(), // Store original input for UI
+      content: input.trim(),
     };
     const updatedMessages = [...messages, newUserMessage];
     setMessages(updatedMessages);
@@ -890,7 +889,6 @@ ${input.trim()}
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      // Use inputToSend for the model, including "まとめ" if third input
       const messagesForModel = [
         ...messages,
         { role: "user", content: inputToSend }
@@ -1095,6 +1093,13 @@ ${input.trim()}
           <p className="text-gray-500 mt-2">
             哲学者を選択してセッションを開始してください。
           </p>
+        </div>
+      )}
+
+      {/* MPVでPWAアプリのため、Safariで複数ページが開くので、簡易的なユーザーMGSで対応 */}
+      {sessionStarted && (
+        <div className="mb-4 p-2 bg-blue-100 text-blue-800 rounded text-center">
+          ご利用後は、タブを閉じてアプリを終了してください。
         </div>
       )}
 
