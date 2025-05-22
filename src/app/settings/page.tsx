@@ -18,7 +18,7 @@ export default function SettingsPage() {
   const [newUsername, setNewUsername] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [showAddToHomeScreen, setShowAddToHomeScreen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"userInfo" | "userGuide">("userInfo"); // New state for tab
 
   const supabase = getSupabaseClient();
 
@@ -66,12 +66,6 @@ export default function SettingsPage() {
         setIsLoading(false);
       }
     };
-
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    if (isIOS && !isStandalone) {
-      setShowAddToHomeScreen(true);
-    }
 
     fetchUserData();
 
@@ -296,45 +290,102 @@ export default function SettingsPage() {
 
       <h1 className="text-2xl font-bold mb-4 text-center">設定</h1>
 
-      <div className="mb-6 p-4 border rounded bg-gray-100">
-        <h2 className="text-xl font-bold mb-2">ユーザー情報</h2>
-        {isLoading ? (
-          <p className="mb-2">読み込み中...</p>
-        ) : (
-          currentUser && (
-            <div className="mb-2 space-y-2">
-              <p>
-                <strong>ユーザー名: </strong>
-                <span
-                  onClick={() => setShowUsernameModal(true)}
-                  className="text-blue-500 hover:underline cursor-pointer"
-                >
-                  {currentUser}
-                </span>
-              </p>
-              <p>
-                <strong>メールアドレス: </strong>
-                <span
-                  onClick={() => setShowEmailPasswordModal(true)}
-                  className="text-blue-500 hover:underline cursor-pointer"
-                >
-                  {currentEmail}
-                </span>
-              </p>
-              <p>
-                <span
-                  onClick={() => setShowPasswordModal(true)}
-                  className="text-blue-500 hover:underline cursor-pointer"
-                >
-                  パスワードを変更
-                </span>
+      {/* Tab Navigation */}
+      <div className="flex justify-center mb-4">
+        <button
+          onClick={() => setActiveTab("userInfo")}
+          className={`px-4 py-2 font-medium ${activeTab === "userInfo" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-600 hover:text-gray-800"}`}
+        >
+          ユーザー情報
+        </button>
+        <button
+          onClick={() => setActiveTab("userGuide")}
+          className={`px-4 py-2 font-medium ${activeTab === "userGuide" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-600 hover:text-gray-800"}`}
+        >
+          ユーザーガイド
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "userInfo" && (
+        <div className="mb-6 p-4 border rounded bg-gray-100">
+          <h2 className="text-xl font-bold mb-2">ユーザー情報</h2>
+          {isLoading ? (
+            <p className="mb-2">読み込み中...</p>
+          ) : (
+            currentUser && (
+              <div className="mb-2 space-y-2">
+                <p>
+                  <strong>ユーザー名: </strong>
+                  <span
+                    onClick={() => setShowUsernameModal(true)}
+                    className="text-blue-500 hover:underline cursor-pointer"
+                  >
+                    {currentUser}
+                  </span>
+                </p>
+                <p>
+                  <strong>メールアドレス: </strong>
+                  <span
+                    onClick={() => setShowEmailPasswordModal(true)}
+                    className="text-blue-500 hover:underline cursor-pointer"
+                  >
+                    {currentEmail}
+                  </span>
+                </p>
+                <p>
+                  <span
+                    onClick={() => setShowPasswordModal(true)}
+                    className="text-blue-500 hover:underline cursor-pointer"
+                  >
+                    パスワードを変更
+                  </span>
+                </p>
+              </div>
+            )
+          )}
+          {error && <div className="text-red-500 mb-4">{error}</div>}
+          {success && <div className="text-green-500 mb-4">{success}</div>}
+        </div>
+      )}
+
+      {activeTab === "userGuide" && (
+        <div className="mb-6 p-4 border rounded bg-gray-100">
+          <h2 className="text-xl font-bold mb-2">ユーザーガイド</h2>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold">Q: アプリがフリーズしたり、認証に時間がかかる場合はどうすればいいですか？</h3>
+              <p className="text-gray-700">
+                A: ネットワークの問題やサーバーの遅延により、認証が遅れることがあります。5秒以上「読み込み中...」が表示される場合、アプリのウィンドウ（タブ）を閉じて、再度NBRCDアプリを開いてください。オフラインの場合は、ネットワークに接続してからお試しください。
               </p>
             </div>
-          )
-        )}
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        {success && <div className="text-green-500 mb-4">{success}</div>}
-      </div>
+            <div>
+              <h3 className="text-lg font-semibold">Q: Safariで複数のタブが開いてしまうのはなぜですか？</h3>
+              <p className="text-gray-700">
+                A: NBRCDはPWA（プログレッシブウェブアプリ）として動作します。Safariでご利用後、必ずタブを閉じてアプリを終了してください。これにより、不要なタブが溜まるのを防ぎ、快適にご利用いただけます。
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Q: 学びセッションやコンサルティングセッションの違いは何ですか？</h3>
+              <p className="text-gray-700">
+                A: 学びセッションでは、哲学者の教えに基づいた対話を通じて自己反省や行動計画を立てます。コンサルティングセッションでは、より具体的な課題に対するアドバイスを得られます。ホーム画面からどちらかを選んで開始してください。
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Q: ポイントは何に使えますか？</h3>
+              <p className="text-gray-700">
+                A: ポイントはログインやアクション選択、タスク完了などで獲得できます。現在は進捗の指標として機能しますが、将来的に特典や機能の拡張を予定しています。ポイント履歴は「ポイント」ページで確認できます。
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Q: オフラインでもアプリを使えますか？</h3>
+              <p className="text-gray-700">
+                A: 一部の機能（ホーム画面やタスクリスト）はオフラインでも利用可能です。ただし、学びセッションやコンサルティングセッション、ユーザー情報の更新にはインターネット接続が必要です。ネットワーク状態を確認してください。
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showMenu && (
         <div className="fixed inset-x-0 bottom-0 bg-white shadow-lg p-4 flex flex-col space-y-4 animate-slide-up">
@@ -462,20 +513,6 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
-        </div>
-      )}
-
-      {showAddToHomeScreen && (
-        <div className="fixed bottom-4 left-4 right-4 p-4 bg-blue-100 border border-blue-300 rounded-lg shadow-lg">
-          <p className="text-sm">
-            iPhoneのホーム画面にアプリを追加するには、Safariの「共有」ボタンをタップし、「ホーム画面に追加」を選択してください。
-          </p>
-          <button
-            onClick={() => setShowAddToHomeScreen(false)}
-            className="mt-2 text-blue-600 hover:underline"
-          >
-            閉じる
-          </button>
         </div>
       )}
     </div>
