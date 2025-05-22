@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from '@/utils/supabase/client';
+import { FaArrowLeft } from "react-icons/fa";
+
 
 interface PointLog {
   id: string;
@@ -68,7 +70,7 @@ export default function PointsPage() {
           className="text-gray-600 hover:text-gray-800 text-2xl"
           aria-label="ホームへ移動"
         >
-          ＜
+          <FaArrowLeft size={24} />
         </button>
 
         <h1 className="text-2xl font-bold">ポイント履歴</h1>

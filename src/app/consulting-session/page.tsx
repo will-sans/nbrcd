@@ -233,7 +233,7 @@ export default function ConsultingSession() {
         >
           <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-semibold">コンサルティングセッション</h1>
+        <h1 className="text-xl font-semibold">コンサルティング</h1>
         <div className="w-36">
           <select
             value={promptMode}

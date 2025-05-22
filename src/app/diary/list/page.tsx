@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
+import { FaArrowLeft } from "react-icons/fa";
+
 
 interface WorkLog {
   id: number;
@@ -89,9 +91,9 @@ export default function DiaryListPage() {
           className="text-gray-600 hover:text-gray-800"
           aria-label="完了済みタスクに戻る"
         >
-          <span className="text-2xl">＜</span>
+          <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-2xl font-bold">作業日誌一覧</h1>
+        <h1 className="text-2xl font-bold">日誌一覧</h1>
         <div className="w-6" /> {/* Placeholder for alignment */}
       </div>
 

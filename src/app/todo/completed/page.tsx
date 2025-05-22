@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaBook } from "react-icons/fa";
 import { getSupabaseClient } from '@/utils/supabase/client';
+import { FaArrowLeft } from "react-icons/fa";
+
 
 interface Todo {
   id: string;
@@ -239,7 +241,7 @@ export default function CompletedTodoPage() {
           className="text-gray-600 hover:text-gray-800"
           aria-label="ToDoリストに戻る"
         >
-          <span className="text-2xl">＜</span>
+          <FaArrowLeft size={24} />
         </button>
         <h1 className="text-2xl font-bold">完了済み</h1>
         <button

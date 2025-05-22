@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaTrophy } from "react-icons/fa";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { v4 as uuidv4 } from "uuid";
+import { FaArrowLeft } from "react-icons/fa";
+
 
 interface Todo {
   id: string;
@@ -332,22 +333,15 @@ export default function TodoListPage() {
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/")}
-          className="text-gray-600 hover:text-gray-800 text-2xl"
-          aria-label="ホームへ移動"
+          className="text-gray-600 hover:text-gray-800"
+          aria-label="ホームに戻る"
         >
-          ＜
+          <FaArrowLeft size={24} />
         </button>
 
-        <h1 className="text-2xl font-bold">計画</h1>
+        <h1 className="text-2xl font-bold">タスクリスト</h1>
 
         <div className="flex space-x-2">
-          <button
-            onClick={() => router.push("/points")}
-            className="text-gray-600 hover:text-gray-800 text-2xl"
-            aria-label="ポイント履歴を見る"
-          >
-            <FaTrophy size={24} />
-          </button>
           <button
             onClick={() => router.push("/todo/completed")}
             className="text-gray-600 hover:text-gray-800 text-2xl"
