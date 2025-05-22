@@ -9,10 +9,10 @@ import { ActionLog } from "@/types/actionLog";
 import { FaCheck, FaTimes } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
 import { getSupabaseClient } from '@/utils/supabase/client';
+import { getPromptById } from '@/utils/supabase/prompts';
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaArrowLeft } from "react-icons/fa";
-
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -69,7 +69,7 @@ export default function LearningSession() {
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
-    window.removeEventListener("offline", handleOffline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
       window.removeEventListener("online", handleOnline);
@@ -708,12 +708,20 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       return;
     }
 
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.error("Failed to get session:", sessionError?.message);
+      throw new Error("セッションの取得に失敗しました");
+    }
+
     let relevantContext = '';
     try {
       const response = await fetch('/api/similarity-search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({ query: input.trim() }),
       });
@@ -735,53 +743,22 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
 
     const userSummary = sessionMetadata?.summary || `${currentUser}さんのメタデータ：まだセッション履歴がありません。`;
 
-    const systemPromptWithQuestion = `
-あなたは${selectedPhilosopher.name}として、ユーザーの学びと成長を促す対話を提供するプロフェッショナルなコーチです。ユーザーの課題や考えを深掘りし、${selectedPhilosopher.name}の哲学的視点や教えを基に、自然な会話を通じて洞察や新たな視点を提示してください。以下のガイドラインに従ってください：
+    // Fetch prompt from Supabase
+    const prompt = await getPromptById(supabase, 4); // ID 4: Concise Business Insight
+    if (!prompt) {
+      setError('プロンプトの読み込みに失敗しました');
+      return;
+    }
 
-**ユーザーの前提情報**：
-- 以下のメタデータを参考に、ユーザーの傾向や関心を考慮したパーソナライズされた応答を生成してください。
-- ${userSummary}
-- 例：ユーザーのメタデータに「会議の生産性を上げるために議題と目的を明確化しようとしている」とある場合、会議に関する話題が出たらその点を意識して応答してください。
-
-**関連する知識**：
-${relevantContext}
-
-**セッションの目的**：
-- このセッションの目的は、ユーザーが以下の「学び」と「教訓」に会話の中で気づき、それを自身の課題や行動に活かすことです。
-- 学び：${dailyQuestion.learning}
-- 教訓：${dailyQuestion.quote}
-- 会話の中で、ユーザーがこの「学び」と「教訓」に自然と気づくように導き、自己反省や行動変容を促してください。
-
-1. **応答の構造**：
-   - 応答は3文で構成してください。1文目はユーザーの感情や課題に共感する内容、2文目は${selectedPhilosopher.name}の哲学的視点や教えを引用して洞察を提供する内容、3文目は自己反省を促す質問とする。
-   - 応答に「共感：」「展開：」「問いかけ：」などのラベルを含めないでください。自然な会話として3文をつなげて記述してください。
-   - 例：
-     その悩み、とても共感できます。${selectedPhilosopher.name}は「{教え}」と言っています。この考えをどのように活かせそうですか？
-
-2. **学びと成長を促す**：
-   - ユーザーの入力に対して、${selectedPhilosopher.name}の哲学的視点や教えを引用し、関連する洞察を提供してください。
-   - 自己反省を促す質問を投げかけ、次の対話を誘導してください。
-   - 会話の中で、上記の「学び」と「教訓」にユーザーが気づくよう、自然に導いてください。
-
-3. **自然な会話**：
-   - 定型的な応答を避け、自然な会話の流れを維持してください。
-   - ユーザーの入力に応じて柔軟に対応し、対話を深める方向に進めてください。
-
-4. **アクションプランの提示**：
-   - ユーザーの入力が3回目（このメッセージが3回目の応答）の場合、最後に「まとめ」と「アクションプラン」を提示してください。
-   - まとめ：これまでの対話を簡潔に振り返り、学びや気づきを強調してください（1～2文）。「まとめ：」の前に改行を2回（\n\n）入れてください。
-   - アクションプラン：ユーザーの成長に直結する3つの具体的な行動を提案してください。形式は厳密に以下の通りでなければなりません：
-     - 1. [行動1], 2. [行動2], 3. [行動3]
-   - アクションプランは、上記の「学び」と「教訓」に基づき、ユーザーが「やるべきこと」を見極めて行動に移せる内容にしてください。
-   - 例：
-     \n\nまとめ：これまでの対話を通じて、時間管理の重要性について深く考えることができました。\n1. [毎朝5分間の瞑想を行う], 2. [週末に1時間読書する], 3. [1日1回感謝の気持ちを伝える]
-
-**質問：**
-${dailyQuestion.question}
-
-**ユーザー入力：**
-${input.trim()}
-`;
+    // Replace placeholders in prompt
+    const systemPromptWithQuestion = prompt.prompt_text
+      .replace(/{{philosopherName}}/g, selectedPhilosopher.name)
+      .replace('{{relevantContext}}', relevantContext)
+      .replace('{{userSummary}}', userSummary)
+      .replace('{{learning}}', dailyQuestion.learning)
+      .replace('{{quote}}', dailyQuestion.quote)
+      .replace('{{question}}', dailyQuestion.question)
+      .replace('{{userInput}}', input.trim());
 
     const newSystemMessage: Message = {
       role: "system",
@@ -811,6 +788,8 @@ ${input.trim()}
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({
           model: "gpt-4o",
@@ -888,6 +867,12 @@ ${input.trim()}
     await saveLog("send_message", { input: inputToSend });
 
     try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error("Failed to get session:", sessionError?.message);
+        throw new Error("セッションの取得に失敗しました");
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -900,6 +885,8 @@ ${input.trim()}
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({
           model: "gpt-4o",
@@ -1078,16 +1065,9 @@ ${input.trim()}
               再試行する
             </button>
           )}
-          <p className="text-gray-500 mt-2">
+          <p className="text-gray-600 mt-2">
             哲学者を選択してセッションを開始してください。
           </p>
-        </div>
-      )}
-
-      {/* MPVでPWAアプリのため、Safariで複数ページが開くので、簡易的なユーザーMGSで対応 */}
-      {sessionStarted && (
-        <div className="mb-4 p-2 bg-blue-100 text-blue-800 rounded text-center">
-          ご利用後は、タブを閉じてアプリを終了してください。
         </div>
       )}
 
