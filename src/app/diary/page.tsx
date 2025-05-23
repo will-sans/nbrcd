@@ -141,7 +141,7 @@ export default function DiaryPage() {
   };
 
   return (
-    <div className="p-6 max-w-md mx-auto text-black bg-white min-h-screen">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen">
       <h1 className="text-2xl font-bold mb-4">作業日誌入力</h1>
       {errorMessage && (
         <div className="text-red-500 mb-4">{errorMessage}</div>

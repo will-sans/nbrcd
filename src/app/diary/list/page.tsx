@@ -84,18 +84,28 @@ export default function DiaryListPage() {
   }, [router, supabase, startDate, endDate, emotionFilter, keyword]);
 
   return (
-    <div className="p-6 max-w-md mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={() => router.push("/todo/completed")}
+          onClick={() => router.push("/")}
           className="text-gray-600 hover:text-gray-800"
-          aria-label="完了済みタスクに戻る"
+          aria-label="ホームに戻る"
         >
           <FaArrowLeft size={24} />
         </button>
         <h1 className="text-2xl font-bold">日誌一覧</h1>
         <div className="w-6" /> {/* Placeholder for alignment */}
+
+        <button
+          onClick={() => router.push("/todo/completed")}
+          className="text-gray-600 hover:text-gray-800 text-2xl"
+          aria-label="完了済みタスクへ移動"
+        >
+          ☑️
+        </button>
+
       </div>
+
 
       {errorMessage && (
         <div className="text-red-500 mb-4">{errorMessage}</div>

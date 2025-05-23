@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaBook } from "react-icons/fa";
+import { FaCheck, FaBook } from "react-icons/fa";
 import { getSupabaseClient } from '@/utils/supabase/client';
-import { FaArrowLeft } from "react-icons/fa";
 
 
 interface Todo {
@@ -234,14 +233,14 @@ export default function CompletedTodoPage() {
   };
 
   return (
-    <div className="p-6 max-w-md mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/todo/list")}
           className="text-gray-600 hover:text-gray-800"
           aria-label="ToDoリストに戻る"
         >
-          <FaArrowLeft size={24} />
+          <FaCheck size={24} />
         </button>
         <h1 className="text-2xl font-bold">完了済み</h1>
         <button
