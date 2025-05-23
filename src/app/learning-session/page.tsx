@@ -6,13 +6,12 @@ import Image from "next/image";
 import { philosophers } from "@/data/philosophers";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
-import { FaCheck, FaTimes } from "react-icons/fa";
+import { FaCheck, FaTimes, FaArrowLeft } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { getPromptById } from '@/utils/supabase/prompts';
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaArrowLeft } from "react-icons/fa";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -58,6 +57,7 @@ export default function LearningSession() {
   const [sessionMetadata, setSessionMetadata] = useState<SessionMetadata | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = getSupabaseClient();
@@ -743,14 +743,12 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
 
     const userSummary = sessionMetadata?.summary || `${currentUser}さんのメタデータ：まだセッション履歴がありません。`;
 
-    // Fetch prompt from Supabase
-    const prompt = await getPromptById(supabase, 4); // ID 4: Concise Business Insight
+    const prompt = await getPromptById(supabase, 4);
     if (!prompt) {
       setError('プロンプトの読み込みに失敗しました');
       return;
     }
 
-    // Replace placeholders in prompt
     const systemPromptWithQuestion = prompt.prompt_text
       .replace(/{{philosopherName}}/g, selectedPhilosopher.name)
       .replace('{{relevantContext}}', relevantContext)
@@ -966,6 +964,13 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
     setIsModalOpen(false);
   };
 
+  const handleQuestionClick = () => {
+    if (dailyQuestion) {
+      saveLog("open_question_modal", { questionId: dailyQuestion.id.toString() });
+      setIsQuestionModalOpen(true);
+    }
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -1052,6 +1057,54 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {isQuestionModalOpen && dailyQuestion && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 bg-black z-50"
+              onClick={() => setIsQuestionModalOpen(false)}
+            />
+            <motion.div
+              initial={{ y: "-100%", opacity: 0 }}
+              animate={{ y: "0%", opacity: 1 }}
+              exit={{ y: "-100%", opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="fixed top-0 left-6 w-full max-w-2xl bg-white rounded-b-lg shadow-lg z-50 p-6"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">質問の詳細</h2>
+                <button
+                  onClick={() => setIsQuestionModalOpen(false)}
+                  className="text-gray-600 hover:text-gray-800"
+                  aria-label="モーダルを閉じる"
+                >
+                  <FaTimes size={20} />
+                </button>
+              </div>
+              <div className="text-gray-700">
+                {/* <p className="mb-2"><strong>質問:</strong> {dailyQuestion.question}</p> */}
+                {/* <p className="mb-2"><strong>タイトル:</strong> {dailyQuestion.title}</p> */}
+                <p className="mb-2"><strong>学び:</strong> {dailyQuestion.learning}</p>
+                {/* <p className="mb-2"><strong>教訓:</strong> {dailyQuestion.quote}</p> */}
+                <p className="mb-2"><strong>カテゴリ:</strong> {dailyQuestion.category}</p>
+                <p className="mb-2"><strong>書籍:</strong> {dailyQuestion.book}</p>
+                <p className="mb-2"><strong>章:</strong> {dailyQuestion.chapter}</p>
+                {/* {dailyQuestion.intro && (
+                  <p className="mb-2"><strong>イントロ:</strong> {dailyQuestion.intro}</p>
+                )}
+                {dailyQuestion.call_to_action && (
+                  <p className="mb-2"><strong>行動喚起:</strong> {dailyQuestion.call_to_action}</p>
+                )} */}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {!selectedPhilosopherId && (
         <div className="mb-4 p-4 bg-gray-100 rounded text-center">
           <h2 className="text-lg font-semibold">
@@ -1072,7 +1125,10 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       )}
 
       {selectedPhilosopherId && dailyQuestion && (
-        <div className="mb-4 p-4 bg-gray-100 rounded">
+        <div
+          className="mb-4 p-4 bg-gray-100 rounded cursor-pointer hover:bg-gray-200 transition"
+          onClick={handleQuestionClick}
+        >
           <h2 className="text-lg font-semibold">{dailyQuestion.question}</h2>
         </div>
       )}
