@@ -9,7 +9,10 @@ export default function DiaryPage() {
   const searchParams = useSearchParams();
   const supabase = getSupabaseClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [logId, setLogId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -26,23 +29,12 @@ export default function DiaryPage() {
   });
 
   useEffect(() => {
-    const todoId = searchParams ? searchParams.get("todo_id") || "" : "";
-    const taskContent = searchParams ? searchParams.get("task_content") || "" : "";
-    const completedDate = searchParams ? searchParams.get("completed_date") || "" : "";
+    const todoId = searchParams?.get("todo_id") || "";
+    const taskContent = searchParams?.get("task_content") || "";
+    const completedDate = searchParams?.get("completed_date") || "";
+    const workLogId = searchParams?.get("id") || null;
 
-    const checkExistingLog = async () => {
-      if (!todoId) {
-        setFormData((prev) => ({
-          ...prev,
-          todo_id: todoId,
-          task_content: taskContent,
-          date: completedDate
-            ? new Date(completedDate).toISOString().split("T")[0]
-            : new Date().toISOString().split("T")[0],
-        }));
-        return;
-      }
-
+    const initializeForm = async () => {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("User not authenticated:", userError?.message);
@@ -50,43 +42,80 @@ export default function DiaryPage() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("work_logs")
-        .select("id")
-        .eq("todo_id", todoId)
-        .eq("user_id", user.id)
-        .single();
+      if (workLogId) {
+        // Editing mode
+        setIsEditing(true);
+        setLogId(workLogId);
+        const { data, error } = await supabase
+          .from("work_logs")
+          .select("*")
+          .eq("id", workLogId)
+          .eq("user_id", user.id)
+          .single();
 
-      if (error && error.code !== "PGRST116") {
-        console.error("Error checking existing log:", error);
-        setErrorMessage("既存の日報確認に失敗しました");
-        return;
-      }
-
-      if (data) {
-        alert("このタスクの日報はすでに登録されています");
-        router.push("/todo/completed");
-        return;
-      }
-
-      let date = "";
-      if (completedDate) {
-        try {
-          date = new Date(completedDate).toISOString().split("T")[0];
-        } catch {
-          console.warn("Invalid completed_date:", completedDate);
+        if (error) {
+          console.error("Error fetching work log:", error);
+          setErrorMessage("日報の取得に失敗しました");
+          return;
         }
-      }
 
-      setFormData((prev) => ({
-        ...prev,
-        todo_id: todoId,
-        task_content: taskContent,
-        date: date || new Date().toISOString().split("T")[0],
-      }));
+        if (data) {
+          setFormData({
+            date: new Date(data.date).toISOString().split("T")[0],
+            task_content: data.task_content || "",
+            goal: data.goal || "",
+            time_allocation: data.time_allocation || "",
+            issues: data.issues || "",
+            solutions: data.solutions || "",
+            next_steps: data.next_steps || "",
+            learnings: data.learnings || "",
+            kpi: data.kpi || "",
+            emotion: data.emotion || "",
+            todo_id: data.todo_id || "",
+          });
+        }
+      } else {
+        // New log mode
+        if (todoId) {
+          const { data, error } = await supabase
+            .from("work_logs")
+            .select("id")
+            .eq("todo_id", todoId)
+            .eq("user_id", user.id)
+            .single();
+
+          if (error && error.code !== "PGRST116") {
+            console.error("Error checking existing log:", error);
+            setErrorMessage("既存の日報確認に失敗しました");
+            return;
+          }
+
+          if (data) {
+            alert("このタスクの日報はすでに登録されています");
+            router.push("/todo/completed");
+            return;
+          }
+        }
+
+        let date = "";
+        if (completedDate) {
+          try {
+            date = new Date(completedDate).toISOString().split("T")[0];
+          } catch {
+            console.warn("Invalid completed_date:", completedDate);
+          }
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          todo_id: todoId,
+          task_content: taskContent,
+          date: date || new Date().toISOString().split("T")[0],
+        }));
+      }
     };
 
-    checkExistingLog();
+    initializeForm();
   }, [searchParams, supabase, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,32 +133,95 @@ export default function DiaryPage() {
     }
 
     try {
-      const { error } = await supabase.from("work_logs").insert({
-        date: formData.date,
-        task_content: formData.task_content,
-        goal: formData.goal,
-        time_allocation: formData.time_allocation,
-        issues: formData.issues,
-        solutions: formData.solutions,
-        next_steps: formData.next_steps,
-        learnings: formData.learnings,
-        kpi: formData.kpi,
-        emotion: formData.emotion,
-        user_id: user.id,
-        todo_id: formData.todo_id || null,
-      });
+      if (isEditing && logId) {
+        // Update existing log
+        const { error } = await supabase
+          .from("work_logs")
+          .update({
+            date: formData.date,
+            task_content: formData.task_content,
+            goal: formData.goal,
+            time_allocation: formData.time_allocation,
+            issues: formData.issues,
+            solutions: formData.solutions,
+            next_steps: formData.next_steps,
+            learnings: formData.learnings,
+            kpi: formData.kpi,
+            emotion: formData.emotion,
+            todo_id: formData.todo_id || null,
+          })
+          .eq("id", logId)
+          .eq("user_id", user.id);
 
-      if (error) {
-        throw new Error(error.message || "日報の保存に失敗しました");
+        if (error) {
+          throw new Error(error.message || "日報の更新に失敗しました");
+        }
+      } else {
+        // Create new log
+        const { error } = await supabase.from("work_logs").insert({
+          date: formData.date,
+          task_content: formData.task_content,
+          goal: formData.goal,
+          time_allocation: formData.time_allocation,
+          issues: formData.issues,
+          solutions: formData.solutions,
+          next_steps: formData.next_steps,
+          learnings: formData.learnings,
+          kpi: formData.kpi,
+          emotion: formData.emotion,
+          user_id: user.id,
+          todo_id: formData.todo_id || null,
+        });
+
+        if (error) {
+          throw new Error(error.message || "日報の保存に失敗しました");
+        }
       }
 
-      router.push("/todo/completed");
+      router.push("/diary/list");
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "日報の保存に失敗しました";
-      console.error("Failed to save log:", err);
+      const errorMessage = err instanceof Error ? err.message : "日報の処理に失敗しました";
+      console.error("Failed to process log:", err);
       setErrorMessage(errorMessage);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!logId || !isEditing) return;
+    if (!confirm("この日報を削除しますか？")) return;
+
+    setIsDeleting(true);
+    setErrorMessage("");
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("User not authenticated:", userError?.message);
+      setErrorMessage("認証エラー：ログインしてください");
+      setIsDeleting(false);
+      router.push("/login");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("work_logs")
+        .delete()
+        .eq("id", logId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "日報の削除に失敗しました");
+      }
+
+      router.push("/diary/list");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "日報の削除に失敗しました";
+      console.error("Failed to delete log:", err);
+      setErrorMessage(errorMessage);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -142,7 +234,9 @@ export default function DiaryPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen">
-      <h1 className="text-2xl font-bold mb-4">作業日誌入力</h1>
+      <h1 className="text-2xl font-bold mb-4">
+        {isEditing ? "作業日誌編集" : "作業日誌入力"}
+      </h1>
       {errorMessage && (
         <div className="text-red-500 mb-4">{errorMessage}</div>
       )}
@@ -259,15 +353,32 @@ export default function DiaryPage() {
         <div className="flex space-x-2">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className={`bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isSubmitting || isDeleting}
+            className={`bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 ${
+              isSubmitting || isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            {isSubmitting ? "保存中..." : "保存"}
+            {isSubmitting ? "処理中..." : isEditing ? "更新" : "保存"}
           </button>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isDeleting || isSubmitting}
+              className={`bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 ${
+                isDeleting || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isDeleting ? "削除中..." : "削除"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => router.push("/todo/completed")}
-            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            onClick={() => router.push("/diary/list")}
+            disabled={isSubmitting || isDeleting}
+            className={`bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 ${
+              isSubmitting || isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
             キャンセル
           </button>

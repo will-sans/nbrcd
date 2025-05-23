@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaArrowLeft } from "react-icons/fa";
 
-
 interface WorkLog {
   id: number;
   date: string;
@@ -40,7 +39,8 @@ export default function DiaryListPage() {
           .from("work_logs")
           .select("id, date, task_content, issues, learnings, emotion, todo_id")
           .eq("user_id", user.id)
-          .order("date", { ascending: false });
+          .order("date", { ascending: false })
+          .order("time_allocation", { ascending: false });
 
         // Apply filters
         if (startDate) {
@@ -83,6 +83,10 @@ export default function DiaryListPage() {
     };
   }, [router, supabase, startDate, endDate, emotionFilter, keyword]);
 
+  const handleRowClick = (logId: number) => {
+    router.push(`/diary?page=edit&id=${logId}`);
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -94,8 +98,7 @@ export default function DiaryListPage() {
           <FaArrowLeft size={24} />
         </button>
         <h1 className="text-2xl font-bold">日誌一覧</h1>
-        <div className="w-6" /> {/* Placeholder for alignment */}
-
+        <div className="w-6" />
         <button
           onClick={() => router.push("/todo/completed")}
           className="text-gray-600 hover:text-gray-800 text-2xl"
@@ -103,9 +106,7 @@ export default function DiaryListPage() {
         >
           ☑️
         </button>
-
       </div>
-
 
       {errorMessage && (
         <div className="text-red-500 mb-4">{errorMessage}</div>
@@ -172,7 +173,11 @@ export default function DiaryListPage() {
           <tbody>
             {workLogs.length > 0 ? (
               workLogs.map((log) => (
-                <tr key={log.id} className="border-b hover:bg-gray-100">
+                <tr
+                  key={log.id}
+                  className="border-b hover:bg-gray-100 cursor-pointer"
+                  onClick={() => handleRowClick(log.id)}
+                >
                   <td className="p-2 text-sm">
                     {new Date(log.date).toLocaleDateString("ja-JP", {
                       year: "numeric",
