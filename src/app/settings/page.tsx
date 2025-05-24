@@ -10,15 +10,18 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [currentGoal, setCurrentGoal] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [showEmailPasswordModal, setShowEmailPasswordModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [activeTab, setActiveTab] = useState<"userInfo" | "userGuide">("userInfo"); // New state for tab
+  const [newGoal, setNewGoal] = useState("");
+  const [activeTab, setActiveTab] = useState<"userInfo" | "userGuide">("userInfo");
 
   const supabase = getSupabaseClient();
 
@@ -33,9 +36,9 @@ export default function SettingsPage() {
       console.log("User already logged in on mount:", user);
 
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
-          console.error("Failed to get session:", sessionError?.message);
+        const { data: { session }, error: fetchSessionError } = await supabase.auth.getSession();
+        if (fetchSessionError || !session) {
+          console.error("Failed to get session:", fetchSessionError?.message);
           throw new Error("セッションの取得に失敗しました");
         }
 
@@ -57,7 +60,28 @@ export default function SettingsPage() {
         const data = await response.json();
         setCurrentUser(data.username);
         setCurrentEmail(data.email);
-      } catch (err) {
+
+        // Fetch the user's latest session metadata to get the goal
+        const { data: sessionData, error: sessionDataError } = await supabase
+          .from('user_session_metadata')
+          .select('goal')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (sessionDataError) {
+          if (sessionDataError.code === 'PGRST116') {
+            // No record exists, which is fine; goal will be null
+            setCurrentGoal(null);
+          } else {
+            console.error("Failed to fetch user session metadata:", sessionDataError);
+            throw new Error("セッション情報の取得に失敗しました");
+          }
+        } else {
+          setCurrentGoal(sessionData?.goal || null);
+        }
+      } catch (err: unknown) {
         console.error("ユーザー情報の取得に失敗しました:", err);
         localStorage.removeItem("userId");
         localStorage.removeItem("currentUser");
@@ -241,6 +265,55 @@ export default function SettingsPage() {
     }
   };
 
+  const handleUpdateGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!newGoal || newGoal.length < 3) {
+      setError("目標は3文字以上で入力してください");
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('ユーザーIDが見つかりません');
+      }
+
+      const { data: { session }, error: updateSessionError } = await supabase.auth.getSession();
+      if (updateSessionError || !session) {
+        console.error("Failed to get session:", updateSessionError?.message);
+        throw new Error("セッションの取得に失敗しました");
+      }
+
+      // Update or insert the goal in user_session_metadata
+      const { error: upsertError } = await supabase
+        .from('user_session_metadata')
+        .upsert({
+          user_id: user.id,
+          session_id: `settings-update-${Date.now()}`,
+          summary: "", // Leave summary unchanged for now
+          user_inputs: [], // Leave user_inputs unchanged
+          selected_action: null, // Leave selected_action unchanged
+          updated_at: new Date().toISOString(),
+          goal: newGoal,
+        }, { onConflict: 'user_id' });
+
+      if (upsertError) {
+        throw new Error(upsertError.message || '目標の更新に失敗しました');
+      }
+
+      setCurrentGoal(newGoal);
+      setSuccess("目標が更新されました！");
+      setShowGoalModal(false);
+      setNewGoal("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setSuccess(null);
+    }
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col relative">
       <div className="absolute top-4 left-4">
@@ -339,6 +412,18 @@ export default function SettingsPage() {
                     className="text-blue-500 hover:underline cursor-pointer"
                   >
                     パスワードを変更
+                  </span>
+                </p>
+                <p>
+                  <strong>目標: </strong>
+                  <span
+                    onClick={() => {
+                      setNewGoal(currentGoal || "");
+                      setShowGoalModal(true);
+                    }}
+                    className="text-blue-500 hover:underline cursor-pointer"
+                  >
+                    {currentGoal || "目標を設定してください"}
                   </span>
                 </p>
               </div>
@@ -507,6 +592,38 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setShowPasswordModal(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-black px-4 py-2 rounded"
+              >
+                キャンセル
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showGoalModal && (
+        <div className="fixed inset-x-0 bottom-0 bg-white shadow-lg p-4 animate-slide-up">
+          <h2 className="text-xl font-bold mb-2">目標を設定</h2>
+          <form onSubmit={handleUpdateGoal}>
+            <input
+              type="text"
+              value={newGoal}
+              onChange={(e) => setNewGoal(e.target.value)}
+              placeholder="目標を入力してください（例：生産性を向上させる）"
+              className="border p-2 w-full mb-2"
+              minLength={3}
+              autoComplete="off"
+            />
+            <div className="flex space-x-2">
+              <button
+                type="submit"
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                更新
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGoalModal(false)}
                 className="bg-gray-300 hover:bg-gray-400 text-black px-4 py-2 rounded"
               >
                 キャンセル
