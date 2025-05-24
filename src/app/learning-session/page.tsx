@@ -26,6 +26,7 @@ interface SessionMetadata {
   summary: string;
   user_inputs: string[];
   selected_action: string | null;
+  goal: string | null; // Added goal field
 }
 
 interface SimilaritySearchResult {
@@ -377,7 +378,7 @@ export default function LearningSession() {
 
     const { data, error } = await supabase
       .from('user_session_metadata')
-      .select('summary, user_inputs, selected_action')
+      .select('summary, user_inputs, selected_action, goal') // Added goal field
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -389,6 +390,7 @@ export default function LearningSession() {
           summary: "",
           user_inputs: [],
           selected_action: null,
+          goal: null, // Initialize goal as null
         });
       } else {
         console.error("Failed to load session metadata:", error, "Message:", error.message, "Details:", error.details);
@@ -396,6 +398,7 @@ export default function LearningSession() {
           summary: "",
           user_inputs: [],
           selected_action: null,
+          goal: null, // Initialize goal as null
         });
       }
       return;
@@ -405,6 +408,7 @@ export default function LearningSession() {
       summary: data.summary || "",
       user_inputs: data.user_inputs || [],
       selected_action: data.selected_action || null,
+      goal: data.goal || null, // Set goal from fetched data
     });
   }, [supabase]);
 
@@ -488,6 +492,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       .map((m) => m.content.replace(/\nまとめ$/, '').trim());
 
     const previousSummary = sessionMetadata?.summary || "";
+    const currentGoal = sessionMetadata?.goal || null; // Preserve the current goal
     let newSummary = previousSummary;
 
     try {
@@ -505,6 +510,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         user_inputs: userInputs,
         selected_action: action,
         updated_at: new Date().toISOString(),
+        goal: currentGoal, // Include the goal in the upsert
       }, { onConflict: 'user_id' });
 
     if (error) {
@@ -516,6 +522,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         summary: newSummary,
         user_inputs: userInputs,
         selected_action: action,
+        goal: currentGoal,
       });
     }
   };
