@@ -201,49 +201,6 @@ export default function LearningSession() {
     };
   }, [router, supabase.auth, checkUser]);
 
-  const loadLastQuestionId = useCallback(async (philosophy: string): Promise<number> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return -1;
-
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('last_question_ids')
-      .eq('user_id', user.id)
-      .single();
-
-    if (error || !data) return -1;
-
-    const lastQuestionIds = data.last_question_ids || {};
-    return lastQuestionIds[philosophy] || -1;
-  }, [supabase]);
-
-  const saveLastQuestionId = async (philosophy: string, lastId: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('last_question_ids')
-      .eq('user_id', user.id)
-      .single();
-
-    const lastQuestionIds = data?.last_question_ids || {};
-    lastQuestionIds[philosophy] = lastId;
-
-    if (error && error.code !== 'PGRST116') {
-      console.error("Failed to fetch user settings:", error);
-      return;
-    }
-
-    const { error: upsertError } = await supabase
-      .from('user_settings')
-      .upsert({ user_id: user.id, last_question_ids: lastQuestionIds }, { onConflict: 'user_id' });
-
-    if (upsertError) {
-      console.error("Failed to save last question ID:", upsertError);
-    }
-  };
-
   const savePoints = useCallback(async (action: string, points: number) => {
     const allowedActions = ["login", "action_select", "task_complete"];
     if (!allowedActions.includes(action)) {
@@ -691,8 +648,8 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
   };
 
   useEffect(() => {
-    if (selectedPhilosopherId) {
-      loadLastQuestionId(selectedPhilosopherId).then(async (lastId) => {
+    if (selectedPhilosopherId && !dailyQuestion) { // Only fetch if no question is already selected
+      const fetchRandomQuestion = async () => {
         const philosopherQuestions = await fetchQuestions(selectedPhilosopherId);
         if (philosopherQuestions.length === 0) {
           setError("選択した哲学者の質問が見つかりません。");
@@ -700,19 +657,20 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
           return;
         }
 
-        let nextQuestion = philosopherQuestions.find((q) => q.id > lastId);
-        if (!nextQuestion) {
-          nextQuestion = philosopherQuestions[0];
-        }
-        setDailyQuestion(nextQuestion);
+        // Randomly select a question from the philosopher's pool
+        const randomIndex = Math.floor(Math.random() * philosopherQuestions.length);
+        const randomQuestion = philosopherQuestions[randomIndex];
+        setDailyQuestion(randomQuestion);
         setMessages([]);
         setSessionStarted(false);
         setParsedResult(null);
         setSystemMessage(null);
         setSelectedAction(null);
-      });
+      };
+
+      fetchRandomQuestion();
     }
-  }, [selectedPhilosopherId, loadLastQuestionId, fetchQuestions]);
+  }, [selectedPhilosopherId, dailyQuestion, fetchQuestions]);
 
   const saveLog = async (action: string, details?: Record<string, string>) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -804,9 +762,16 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         console.error("Failed to save session metadata in background:", err);
       });
 
-      if (selectedPhilosopherId && dailyQuestion) {
-        await saveLastQuestionId(selectedPhilosopherId, dailyQuestion.id);
-      }
+      // Reset session state to allow philosopher selection in the next session
+      setSelectedPhilosopherId("");
+      setDailyQuestion(null);
+      setMessages([]);
+      setSessionStarted(false);
+      setParsedResult(null);
+      setSystemMessage(null);
+      setSelectedAction(null);
+      setShowRecommendations(false);
+      setInput("");
 
       router.push("/todo/list");
     } catch (err) {
@@ -1071,7 +1036,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
   };
 
   const handlePhilosopherChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!sessionStarted) {
+    if (!sessionStarted && dailyQuestion === null) { // Only allow changes if no question is selected and session hasn't started
       setSelectedPhilosopherId(e.target.value);
     }
   };
@@ -1134,7 +1099,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
               id="philosopher"
               value={selectedPhilosopherId}
               onChange={handlePhilosopherChange}
-              disabled={sessionStarted}
+              disabled={sessionStarted || dailyQuestion !== null} // Disable if session started or a question is selected
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-gray-200"
             >
               <option value="">哲学者を選択してください</option>
