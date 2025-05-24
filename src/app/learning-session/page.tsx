@@ -6,7 +6,7 @@ import Image from "next/image";
 import { philosophers } from "@/data/philosophers";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
-import { FaCheck, FaTimes, FaArrowLeft } from "react-icons/fa";
+import { FaCheck, FaTimes, FaArrowLeft, FaLightbulb } from "react-icons/fa";
 import { v4 as uuidv4 } from "uuid";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { getPromptById } from '@/utils/supabase/prompts';
@@ -26,12 +26,24 @@ interface SessionMetadata {
   summary: string;
   user_inputs: string[];
   selected_action: string | null;
-  goal: string | null; // Added goal field
+  goal: string | null;
 }
 
 interface SimilaritySearchResult {
   id: number;
   question: string;
+  learning: string;
+  quote: string;
+  category: string;
+  book: string;
+  chapter: string;
+  similarity: number;
+}
+
+interface RecommendedQuestion {
+  id: number;
+  question: string;
+  philosophy: string;
   learning: string;
   quote: string;
   category: string;
@@ -59,6 +71,8 @@ export default function LearningSession() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+  const [recommendedQuestions, setRecommendedQuestions] = useState<RecommendedQuestion[]>([]);
+  const [showRecommendations, setShowRecommendations] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = getSupabaseClient();
@@ -378,7 +392,7 @@ export default function LearningSession() {
 
     const { data, error } = await supabase
       .from('user_session_metadata')
-      .select('summary, user_inputs, selected_action, goal') // Added goal field
+      .select('summary, user_inputs, selected_action, goal')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -390,7 +404,7 @@ export default function LearningSession() {
           summary: "",
           user_inputs: [],
           selected_action: null,
-          goal: null, // Initialize goal as null
+          goal: null,
         });
       } else {
         console.error("Failed to load session metadata:", error, "Message:", error.message, "Details:", error.details);
@@ -398,7 +412,7 @@ export default function LearningSession() {
           summary: "",
           user_inputs: [],
           selected_action: null,
-          goal: null, // Initialize goal as null
+          goal: null,
         });
       }
       return;
@@ -408,7 +422,7 @@ export default function LearningSession() {
       summary: data.summary || "",
       user_inputs: data.user_inputs || [],
       selected_action: data.selected_action || null,
-      goal: data.goal || null, // Set goal from fetched data
+      goal: data.goal || null,
     });
   }, [supabase]);
 
@@ -492,7 +506,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       .map((m) => m.content.replace(/\nまとめ$/, '').trim());
 
     const previousSummary = sessionMetadata?.summary || "";
-    const currentGoal = sessionMetadata?.goal || null; // Preserve the current goal
+    const currentGoal = sessionMetadata?.goal || null;
     let newSummary = previousSummary;
 
     try {
@@ -510,7 +524,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
         user_inputs: userInputs,
         selected_action: action,
         updated_at: new Date().toISOString(),
-        goal: currentGoal, // Include the goal in the upsert
+        goal: currentGoal,
       }, { onConflict: 'user_id' });
 
     if (error) {
@@ -561,6 +575,109 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
       return [];
     }
   }, [supabase, setError]);
+
+  const fetchRecommendedQuestions = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setError("ユーザーが見つかりません。ログインしてください。");
+      return;
+    }
+
+    // Combine goal and summary, clean the query
+    let query = `${sessionMetadata?.goal || ""}を目標としており、 ${sessionMetadata?.summary || ""}`.trim();
+    query = query.replace(/^.*さんのメタデータ：/, '').trim(); // Remove "Will-testさんのメタデータ：" prefix
+    console.log("Similarity search query:", query);
+
+    if (!query) {
+      setError("目標またはサマリーがありません。設定してください。");
+      return;
+    }
+
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error("Failed to get session:", sessionError?.message);
+        setError("セッションの取得に失敗しました。");
+        return;
+      }
+
+      const response = await fetch('/api/similarity-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          'X-Refresh-Token': session.refresh_token,
+        },
+        body: JSON.stringify({ query }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch recommended questions.');
+      }
+
+      const { results } = await response.json();
+      console.log("Similarity search results:", results);
+
+      if (!results || results.length === 0) {
+        // Fallback: Fetch random questions if no matches found
+        const { data: fallbackQuestions, error: fallbackError } = await supabase
+          .from('questions')
+          .select('id, philosophy, question, learning, quote, category, book, chapter')
+          .limit(5);
+
+        if (fallbackError) {
+          console.error("Error fetching fallback questions:", fallbackError);
+          setError("おすすめの質問が見つかりませんでした。");
+          return;
+        }
+
+        const fallbackResults = fallbackQuestions.map((q: any) => ({
+          ...q,
+          similarity: 0, // No similarity score for fallback
+        }));
+        setRecommendedQuestions(fallbackResults);
+        setShowRecommendations(true);
+        setError("類似する質問が見つかりませんでした。ランダムな質問を表示します。");
+        return;
+      }
+
+      setRecommendedQuestions(results);
+      setShowRecommendations(true);
+    } catch (err) {
+      console.error("Error fetching recommended questions:", err);
+      setError(err instanceof Error ? err.message : "おすすめ質問の取得中にエラーが発生しました。");
+    }
+  };
+
+  const handleSelectRecommendedQuestion = (question: RecommendedQuestion) => {
+    // Fetch the full question details to start the session
+    const fetchQuestionDetails = async () => {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('id, philosophy, question, learning, quote, title, intro, call_to_action, book, chapter, category')
+        .eq('id', question.id)
+        .single();
+
+      if (error) {
+        console.error("Failed to fetch question details:", error);
+        setError("質問の詳細取得に失敗しました。");
+        return;
+      }
+
+      setSelectedPhilosopherId(data.philosophy); // Set the philosopher based on the selected question
+      setDailyQuestion(data);
+      setMessages([]);
+      setSessionStarted(false);
+      setParsedResult(null);
+      setSystemMessage(null);
+      setSelectedAction(null);
+      setShowRecommendations(false);
+      setInput(""); // Clear input to start a new session
+    };
+
+    fetchQuestionDetails();
+  };
 
   useEffect(() => {
     if (selectedPhilosopherId) {
@@ -1093,19 +1210,10 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
                 </button>
               </div>
               <div className="text-gray-700">
-                {/* <p className="mb-2"><strong>質問:</strong> {dailyQuestion.question}</p> */}
-                {/* <p className="mb-2"><strong>タイトル:</strong> {dailyQuestion.title}</p> */}
                 <p className="mb-2"><strong>学び:</strong> {dailyQuestion.learning}</p>
-                {/* <p className="mb-2"><strong>教訓:</strong> {dailyQuestion.quote}</p> */}
                 <p className="mb-2"><strong>カテゴリ:</strong> {dailyQuestion.category}</p>
                 <p className="mb-2"><strong>書籍:</strong> {dailyQuestion.book}</p>
                 <p className="mb-2"><strong>章:</strong> {dailyQuestion.chapter}</p>
-                {/* {dailyQuestion.intro && (
-                  <p className="mb-2"><strong>イントロ:</strong> {dailyQuestion.intro}</p>
-                )}
-                {dailyQuestion.call_to_action && (
-                  <p className="mb-2"><strong>行動喚起:</strong> {dailyQuestion.call_to_action}</p>
-                )} */}
               </div>
             </motion.div>
           </>
@@ -1128,6 +1236,35 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
           <p className="text-gray-600 mt-2">
             哲学者を選択してセッションを開始してください。
           </p>
+        </div>
+      )}
+
+      {!isLoading && !sessionStarted && (
+        <div className="mb-4">
+          <button
+            onClick={fetchRecommendedQuestions}
+            className="flex items-center p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            aria-label="おすすめ質問を表示"
+          >
+            <FaLightbulb size={20} className="mr-2" />
+            おすすめ質問を表示
+          </button>
+          {showRecommendations && recommendedQuestions.length > 0 && (
+            <div className="mt-2 p-4 bg-gray-100 rounded">
+              <h3 className="font-semibold mb-2">おすすめの質問</h3>
+              <ul className="space-y-2">
+                {recommendedQuestions.map((question) => (
+                  <li
+                    key={question.id}
+                    className="p-2 border rounded bg-white cursor-pointer hover:bg-gray-200 transition-colors"
+                    onClick={() => handleSelectRecommendedQuestion(question)}
+                  >
+                    {question.question}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
