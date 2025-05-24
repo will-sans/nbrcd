@@ -52,6 +52,17 @@ interface RecommendedQuestion {
   similarity: number;
 }
 
+interface QuestionFromSupabase {
+  id: number;
+  philosophy: string;
+  question: string;
+  learning: string;
+  quote: string;
+  category: string;
+  book: string;
+  chapter: string;
+}
+
 export default function LearningSession() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -632,7 +643,7 @@ WILLさんのメタデータ：アプリの開発を通じて世の中を良く�
           return;
         }
 
-        const fallbackResults = fallbackQuestions.map((q: any) => ({
+        const fallbackResults = fallbackQuestions.map((q: QuestionFromSupabase) => ({
           ...q,
           similarity: 0, // No similarity score for fallback
         }));
