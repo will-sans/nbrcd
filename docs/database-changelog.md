@@ -28,3 +28,11 @@ This document tracks changes to the database schema for the NBRCD app.
     - Modified `loadSessionMetadata` to fetch the `goal` field.
     - Modified `saveSessionMetadata` to preserve the `goal` in upsert operations.
 
+## 2025-05-24
+- **Fixed Goal Update to Preserve Existing Metadata in Settings Page**
+  - **Description**: Modified `app/settings/page.tsx` to preserve existing `summary`, `user_inputs`, and `selected_action` fields in `user_session_metadata` when updating the `goal` field.
+  - **Purpose**: Ensure that updating the goal does not overwrite other metadata fields with empty values, maintaining data integrity.
+  - **Implementation**:
+    - Fetched current metadata before performing the upsert.
+    - Included existing `summary`, `user_inputs`, and `selected_action` values in the upsert operation.
+
