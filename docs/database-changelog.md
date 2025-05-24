@@ -36,3 +36,50 @@ This document tracks changes to the database schema for the NBRCD app.
     - Fetched current metadata before performing the upsert.
     - Included existing `summary`, `user_inputs`, and `selected_action` values in the upsert operation.
 
+## 2025-05-24
+- **Added Simple Recommendation Function to Learning Session Page**
+  - **Description**: Modified `learning-session/page.tsx` to include a "Recommendation" button that fetches questions from the `questions` table based on the user’s `goal` and `summary` using embedding similarity search.
+  - **Purpose**: Enhance user experience by suggesting relevant questions to start a new session, tailored to the user’s goals and past interactions.
+  - **Implementation**:
+    - Added a button below the message area to fetch recommended questions.
+    - Used the existing `search_user_questions` RPC to perform similarity search with the user’s `goal` and `summary`.
+    - Displayed recommended questions in a list, allowing the user to select one to start a new session.
+
+## 2025-05-24
+- **Updated Recommendation Function in Learning Session Page**
+  - **Description**: Modified `learning-session/page.tsx` to show the "Recommendation" button immediately after loading, and updated the fetch logic to search all questions in the `questions` table using `/api/similarity-search`.
+  - **Purpose**: Improve user experience by allowing recommendations before selecting a philosopher, and ensure broader question matching.
+  - **Implementation**:
+    - Moved the "Recommendation" button to appear after loading completes, regardless of philosopher selection.
+    - Updated `fetchRecommendedQuestions` to use `/api/similarity-search` with the user’s `goal` and `summary`, removing the `philosophy` filter.
+    - Improved error handling for better user feedback.
+
+## 2025-05-24
+- **Fixed TypeScript Error in `learning-session/page.tsx`**
+  - **Description**: Resolved `@typescript-eslint/no-explicit-any` error by defining a `QuestionFromSupabase` type for the raw question data in `fetchRecommendedQuestions`.
+  - **Purpose**: Ensure type safety and allow the build process to complete successfully, maintaining robust development.
+
+## 2025-05-24
+- **Removed `last_question_id` Usage in Learning Session Page**
+  - **Description**: Modified `learning-session/page.tsx` to remove all usage of `last_question_id` and associated functions, ensuring that recommended questions are not overwritten by random questions.
+  - **Purpose**: Fix the issue where selected recommended questions were being overwritten, allowing users to start sessions with their chosen question.
+  - **Implementation**:
+    - Removed `loadLastQuestionId` and `saveLastQuestionId` functions.
+    - Updated `useEffect` to only fetch a random question if `dailyQuestion` is not set, preserving recommended question selections.
+    - Simplified `handleSelectRecommendedQuestion` to remove unnecessary state management.
+
+## 2025-05-24
+- **Disabled Philosopher Selector After Question Selection**
+  - **Description**: Modified `learning-session/page.tsx` to disable the philosopher selector after a question is selected, preventing changes until the session is reset.
+  - **Purpose**: Improve user experience by ensuring consistency between the selected philosopher and the current question, avoiding confusion.
+  - **Implementation**:
+    - Updated the philosopher selector to be disabled when `dailyQuestion` is set or `sessionStarted` is true.
+    - Ensured the selector is re-enabled after session reset by clearing `dailyQuestion` and `selectedPhilosopherId`.
+
+## 2025-05-24
+- **Fixed TypeScript Error for Philosopher Selector `disabled` Prop**
+  - **Description**: Resolved TypeScript error in `learning-session/page.tsx` by ensuring the `disabled` prop of the philosopher selector evaluates to a boolean.
+  - **Purpose**: Fix type mismatch error to allow successful builds while maintaining the intended behavior of disabling the selector after a question is selected.
+  - **Implementation**:
+    - Updated the `disabled` prop expression to `sessionStarted || dailyQuestion !== null` to ensure it resolves to a boolean.
+    - Aligned `handlePhilosopherChange` logic for consistency.  
