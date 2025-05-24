@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { FaBars, FaCheck, FaTrophy, FaQuestionCircle, FaBook, FaBrain } from "react-icons/fa";
+import { FaBars, FaCheck, FaTrophy, FaQuestionCircle, FaBook, FaBrain, FaEdit } from "react-icons/fa";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { motion } from "framer-motion";
 
@@ -12,6 +12,7 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userGoal, setUserGoal] = useState<string | null>(null);
   const supabase = getSupabaseClient();
 
   const checkUser = useCallback(async () => {
@@ -25,6 +26,23 @@ export default function Home() {
         return;
       }
       setCurrentUser(user.user_metadata?.username || user.email || "ゲスト");
+
+      // Fetch the user's latest session metadata to get the goal
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('user_session_metadata')
+        .select('goal')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (sessionError && sessionError.code !== 'PGRST116') {
+        console.error("Failed to fetch user session metadata:", sessionError);
+        setError("セッション情報の取得に失敗しました。");
+        return;
+      }
+
+      setUserGoal(sessionData?.goal || null);
     } catch {
       setError("ユーザー情報の取得に失敗しました。");
       router.push("/login");
@@ -66,7 +84,7 @@ export default function Home() {
           />
           <h1 className="text-xl font-semibold text-gray-800">NBRCD</h1>
         </div>
-        <div className="w-36" /> {/* Spacer for alignment */}
+        <h1 className="text-sm font-semibold text-gray-800">{currentUser}</h1>
       </div>
 
       {isLoading ? (
@@ -85,8 +103,31 @@ export default function Home() {
         </div>
       ) : (
         <div className="mb-6 text-center">
-          <h2 className="text-lg font-semibold">こんにちは、{currentUser}さん</h2>
-          <p className="text-gray-500 mt-2">やりたいことを選んでください。</p>
+          {/*<h2 className="text-lg font-semibold">こんにちは、{currentUser}さん</h2>*/}
+          {userGoal ? (
+            <div className="mt-4 p-3 bg-blue-100 rounded-lg flex items-center justify-center space-x-2">
+              <p className="text-gray-700">目標：{userGoal}</p>
+              <button
+                onClick={() => router.push("/settings")}
+                className="text-blue-500 hover:text-blue-700"
+                aria-label="目標を編集"
+              >
+                <FaEdit size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
+              <p className="text-gray-700 mb-2">目標を設定して、</p>
+              <p className="text-gray-700 mb-2">習慣形成を始めましょう！</p>
+              <button
+                onClick={() => router.push("/settings")}
+                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+              >
+                目標を設定する
+              </button>
+            </div>
+          )}
+          <p className="text-gray-500 mt-4">やりたいことを選んでください。</p>
         </div>
       )}
 
