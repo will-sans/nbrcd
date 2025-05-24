@@ -287,15 +287,29 @@ export default function SettingsPage() {
         throw new Error("セッションの取得に失敗しました");
       }
 
-      // Update or insert the goal in user_session_metadata
+      // Fetch the current metadata to preserve existing values
+      const { data: currentMetadata, error: fetchError } = await supabase
+        .from('user_session_metadata')
+        .select('summary, user_inputs, selected_action')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error("Failed to fetch current metadata:", fetchError);
+        throw new Error("現在のメタデータの取得に失敗しました");
+      }
+
+      // Update or insert the goal in user_session_metadata, preserving existing values
       const { error: upsertError } = await supabase
         .from('user_session_metadata')
         .upsert({
           user_id: user.id,
           session_id: `settings-update-${Date.now()}`,
-          summary: "", // Leave summary unchanged for now
-          user_inputs: [], // Leave user_inputs unchanged
-          selected_action: null, // Leave selected_action unchanged
+          summary: currentMetadata?.summary || "", // Preserve existing summary
+          user_inputs: currentMetadata?.user_inputs || [], // Preserve existing user_inputs
+          selected_action: currentMetadata?.selected_action || null, // Preserve existing selected_action
           updated_at: new Date().toISOString(),
           goal: newGoal,
         }, { onConflict: 'user_id' });
@@ -544,7 +558,7 @@ export default function SettingsPage() {
             <input
               type="password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => setNewEmail(e.target.value)}
               placeholder="新しいパスワード（任意）"
               className="border p-2 w-full mb-2"
               minLength={6}

@@ -19,3 +19,12 @@ This document tracks changes to the database schema for the NBRCD app.
     - Added a modal form to input and validate the goal (minimum 3 characters).
     - Saved the goal to `user_session_metadata` using an upsert operation.
 
+## 2025-05-24
+- **Updated Learning Session to Include Goal in Session Metadata**
+  - **Description**: Modified `learning-session/page.tsx` to fetch and preserve the `goal` field in `user_session_metadata` during session updates.
+  - **Purpose**: Ensure the user’s goal is consistently saved in session metadata, enabling future integration with machine learning recommendations for habit formation.
+  - **Implementation**:
+    - Updated the `SessionMetadata` interface to include the `goal` field.
+    - Modified `loadSessionMetadata` to fetch the `goal` field.
+    - Modified `saveSessionMetadata` to preserve the `goal` in upsert operations.
+
