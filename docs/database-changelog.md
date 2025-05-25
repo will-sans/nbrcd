@@ -102,3 +102,9 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Fixed
 - Removed unwanted trailing newline (`\n`) at the end of the "まとめ：" section in learning session replies by trimming the `summaryPart` in the `extractActions` function (`app/learning-session/page.tsx`). This ensures cleaner output in the UI.
 
+## 2025-05-25
+
+### Fixed FAQ
+- Revised FAQ for wrong informaion(オフラインで一部の機能が使えますX→インターネットがないと使えません). 
+  Add guidance of error recovary(Recommend button error recovery by clearing Safari history). 
+
