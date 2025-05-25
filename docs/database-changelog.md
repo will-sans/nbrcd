@@ -83,3 +83,17 @@ This document tracks changes to the database schema for the NBRCD app.
   - **Implementation**:
     - Updated the `disabled` prop expression to `sessionStarted || dailyQuestion !== null` to ensure it resolves to a boolean.
     - Aligned `handlePhilosopherChange` logic for consistency.  
+
+## 2025-05-25
+
+### Changed
+- Modified `/api/similarity-search` to fetch the top 30 matching questions and randomly select 3 for recommendations, addressing overfitting in `learning-session` recommendations (#ISSUE_NUMBER).
+  - Updated `match_count` from 3 to 30 in Supabase RPC call.
+  - Added `getRandomItems` utility to select random results.
+- Enhanced `learning-session` UI to inform users that recommendations are randomized for variety.
+- Added logging in `learning-session` to track recommended question IDs for analytics.
+
+### Impact
+- Increased variety in `learning-session` recommendations, reducing repetitive questions.
+- No functional changes to `ConsultingSession`, but responses may include more varied context due to randomized results.
+

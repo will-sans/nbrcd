@@ -30,6 +30,12 @@ interface SimilaritySearchResult {
   similarity: number;
 }
 
+// Utility function to randomly select N items from an array
+function getRandomItems<T>(array: T[], count: number): T[] {
+  const shuffled = [...array].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, Math.min(count, array.length));
+}
+
 // API handler
 export default async function handler(
   req: NextApiRequest,
@@ -66,7 +72,7 @@ export default async function handler(
       'search_questions',
       {
         query_embedding: queryEmbedding,
-        match_count: 3, // Return top 3 matches
+        match_count: 30, // Increased to fetch top 30 matches
       }
     )) as { data: SimilaritySearchResult[]; error: PostgrestError | null };
 
@@ -81,8 +87,11 @@ export default async function handler(
       return res.status(404).json({ error: 'No matching questions found.' });
     }
 
-    // Step 3: Format the results
-    const results: SimilaritySearchResult[] = matches.map((match) => ({
+    // Step 3: Randomly select 3 results from the top 30
+    const selectedMatches = getRandomItems(matches, 3);
+
+    // Step 4: Format the results
+    const results: SimilaritySearchResult[] = selectedMatches.map((match) => ({
       id: match.id,
       question: match.question,
       learning: match.learning,
@@ -93,7 +102,7 @@ export default async function handler(
       similarity: match.similarity,
     }));
 
-    // Step 4: Return the results
+    // Step 5: Return the results
     return res.status(200).json({ results });
   } catch (error) {
     console.error('Error in similarity search:', error);
