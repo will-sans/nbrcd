@@ -108,3 +108,8 @@ This document tracks changes to the database schema for the NBRCD app.
 - Revised FAQ for wrong informaion(オフラインで一部の機能が使えますX→インターネットがないと使えません). 
   Add guidance of error recovary(Recommend button error recovery by clearing Safari history). 
 
+## 2025-05-25
+
+### Fixed
+- Removed literal \\n displayed in the "まとめ：" section of learning session replies (e.g., "まとめ：生産性向上には明確な優先順位が重要です。\n"). Updated the extractActions function in app/learning-session/page.tsx to correctly handle the newline before the action plan and remove literal \n characters from the summary and reply, ensuring clean UI output.
+

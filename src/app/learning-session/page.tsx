@@ -288,14 +288,17 @@ export default function LearningSession() {
 
   const extractActions = (reply: string, assistantReplyCount: number): { updatedReply: string; actions: string[] } => {
     console.log('Extracting actions from reply:', reply);
-    const actionPlanMatch = reply.match(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/);
+    // Match the action plan, including the preceding \n if present
+    const actionPlanMatch = reply.match(/\n1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/);
     let updatedReply = reply;
     let actions: string[] = [];
 
     const shouldRemoveQuestions = assistantReplyCount >= 3 && actionPlanMatch;
 
     if (actionPlanMatch) {
-      updatedReply = reply.replace(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/, "").trim();
+      // Remove the action plan, including the preceding \n
+      updatedReply = reply.replace(/\n1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/, "").trim();
+      // Normalize double newlines
       updatedReply = updatedReply.replace(/\\n\\n/g, '\n\n').trim();
       const parts = updatedReply.split("\n\nまとめ：");
       let beforeSummary = parts[0]?.trim() || "";
@@ -320,17 +323,18 @@ export default function LearningSession() {
           }
           summaryPart = summarySentences.join("。");
           if (summaryPart) {
-            summaryPart = summaryPart.trim(); // Remove any trailing newlines or whitespace
+            // Remove any literal \n or trailing whitespace
+            summaryPart = summaryPart.replace(/\\n/g, '').trim();
           }
         }
       }
 
       updatedReply = beforeSummary;
       if (summaryPart) {
-        updatedReply += `\n\nまとめ：${summaryPart}`; // No trailing \n after summaryPart
+        updatedReply += `\n\nまとめ：${summaryPart}`;
       }
 
-      const actionsText = actionPlanMatch[0];
+      const actionsText = actionPlanMatch[0].replace(/^\n/, ''); // Remove the leading \n from actions
       actions = actionsText.split(", ").map((action) =>
         action.replace(/^\d+\.\s*/, "").replace(/^\[|\]$/g, "").trim()
       );
@@ -344,11 +348,17 @@ export default function LearningSession() {
       if (updatedReply) {
         updatedReply += "。";
       }
+      // Remove any literal \n in non-action-plan replies
+      updatedReply = updatedReply.replace(/\\n/g, '').trim();
+    } else {
+      // Remove any literal \n in all cases
+      updatedReply = updatedReply.replace(/\\n/g, '').trim();
     }
 
     console.log('Extracted actions:', actions);
     return { updatedReply, actions };
   };
+
 
   useEffect(() => {
     handleLoginPoints();
