@@ -95,7 +95,7 @@ export default function LearningSession() {
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    window.removeEventListener("offline", handleOffline);
 
     return () => {
       window.removeEventListener("online", handleOnline);
@@ -288,17 +288,14 @@ export default function LearningSession() {
 
   const extractActions = (reply: string, assistantReplyCount: number): { updatedReply: string; actions: string[] } => {
     console.log('Extracting actions from reply:', reply);
-    // Match the action plan, including the preceding \n if present
-    const actionPlanMatch = reply.match(/\n1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/);
+    const actionPlanMatch = reply.match(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/);
     let updatedReply = reply;
     let actions: string[] = [];
 
     const shouldRemoveQuestions = assistantReplyCount >= 3 && actionPlanMatch;
 
     if (actionPlanMatch) {
-      // Remove the action plan, including the preceding \n
-      updatedReply = reply.replace(/\n1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/, "").trim();
-      // Normalize double newlines
+      updatedReply = reply.replace(/1\. \[.*?\], 2\. \[.*?\], 3\. \[.*?\]/, "").trim();
       updatedReply = updatedReply.replace(/\\n\\n/g, '\n\n').trim();
       const parts = updatedReply.split("\n\nまとめ：");
       let beforeSummary = parts[0]?.trim() || "";
@@ -323,8 +320,8 @@ export default function LearningSession() {
           }
           summaryPart = summarySentences.join("。");
           if (summaryPart) {
-            // Remove any literal \n or trailing whitespace
-            summaryPart = summaryPart.replace(/\\n/g, '').trim();
+            // Remove literal \n or escaped \\n
+            summaryPart = summaryPart.replace(/\\n$/, '').trim();
           }
         }
       }
@@ -334,7 +331,7 @@ export default function LearningSession() {
         updatedReply += `\n\nまとめ：${summaryPart}`;
       }
 
-      const actionsText = actionPlanMatch[0].replace(/^\n/, ''); // Remove the leading \n from actions
+      const actionsText = actionPlanMatch[0];
       actions = actionsText.split(", ").map((action) =>
         action.replace(/^\d+\.\s*/, "").replace(/^\[|\]$/g, "").trim()
       );
@@ -348,17 +345,11 @@ export default function LearningSession() {
       if (updatedReply) {
         updatedReply += "。";
       }
-      // Remove any literal \n in non-action-plan replies
-      updatedReply = updatedReply.replace(/\\n/g, '').trim();
-    } else {
-      // Remove any literal \n in all cases
-      updatedReply = updatedReply.replace(/\\n/g, '').trim();
     }
 
     console.log('Extracted actions:', actions);
     return { updatedReply, actions };
   };
-
 
   useEffect(() => {
     handleLoginPoints();
