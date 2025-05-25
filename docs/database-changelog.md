@@ -97,3 +97,8 @@ This document tracks changes to the database schema for the NBRCD app.
 - Increased variety in `learning-session` recommendations, reducing repetitive questions.
 - No functional changes to `ConsultingSession`, but responses may include more varied context due to randomized results.
 
+## 2025-05-25
+
+### Fixed
+- Removed unwanted trailing newline (`\n`) at the end of the "まとめ：" section in learning session replies by trimming the `summaryPart` in the `extractActions` function (`app/learning-session/page.tsx`). This ensures cleaner output in the UI.
+

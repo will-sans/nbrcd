@@ -320,14 +320,14 @@ export default function LearningSession() {
           }
           summaryPart = summarySentences.join("。");
           if (summaryPart) {
-            summaryPart += "。";
+            summaryPart = summaryPart.trim(); // Remove any trailing newlines or whitespace
           }
         }
       }
 
       updatedReply = beforeSummary;
       if (summaryPart) {
-        updatedReply += `\n\nまとめ：${summaryPart}`;
+        updatedReply += `\n\nまとめ：${summaryPart}`; // No trailing \n after summaryPart
       }
 
       const actionsText = actionPlanMatch[0];
