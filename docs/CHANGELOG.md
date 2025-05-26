@@ -85,39 +85,47 @@ This document tracks changes to the database schema for the NBRCD app.
     - Aligned `handlePhilosopherChange` logic for consistency.  
 
 ## 2025-05-25
-
 ### Changed
 - Modified `/api/similarity-search` to fetch the top 30 matching questions and randomly select 3 for recommendations, addressing overfitting in `learning-session` recommendations (#ISSUE_NUMBER).
   - Updated `match_count` from 3 to 30 in Supabase RPC call.
   - Added `getRandomItems` utility to select random results.
 - Enhanced `learning-session` UI to inform users that recommendations are randomized for variety.
 - Added logging in `learning-session` to track recommended question IDs for analytics.
-
 ### Impact
 - Increased variety in `learning-session` recommendations, reducing repetitive questions.
 - No functional changes to `ConsultingSession`, but responses may include more varied context due to randomized results.
 
 ## 2025-05-25
-
 ### Fixed
 - Removed unwanted trailing newline (`\n`) at the end of the "まとめ：" section in learning session replies by trimming the `summaryPart` in the `extractActions` function (`app/learning-session/page.tsx`). This ensures cleaner output in the UI.
 
 ## 2025-05-25
-
 ### Fixed FAQ
 - Revised FAQ for wrong informaion(オフラインで一部の機能が使えますX→インターネットがないと使えません). 
   Add guidance of error recovary(Recommend button error recovery by clearing Safari history). 
 
 ## 2025-05-25
-
 ### Fixed
 - Removed unwanted literal \n at the end of the "まとめ：" section in learning session replies by adding a replacement step in the extractActions function (app/learning-session/page.tsx). This ensures the summary output is clean and matches the intended format.
 
 ## 2025-05-26
-
 ### Fixed
 - Resolved Invalid Refresh Token: Already Used error in fetchRecommendedQuestions function by removing X-Refresh-Token header and adding retry logic with session refresh for token-related errors.
 - Improved session management to prevent reuse of invalidated refresh tokens in API requests.
 ### Changed
 - enhanced error handling in fetchRecommendedQuestions to handle token refresh failures gracefully.
 - Added timeout and abort controller to similarity search API request for better reliability.
+
+## 2025-05-26
+### Fixed
+- Resolved ESLint error @typescript-eslint/no-explicit-any in pages/api/similarity-search.ts by changing catch (error: any) to catch (error: unknown) and updating error handling to safely check error properties.
+- Resolved Invalid Refresh Token: Already Used error in fetchRecommendedQuestions function by removing X-Refresh-Token header and adding retry logic with session refresh for token-related errors.
+- Improved session management to prevent reuse of invalidated refresh tokens in API requests.
+### Added
+- Enhanced /api/similarity-search endpoint with explicit user session validation using supabase.auth.getUser().
+- Added specific error handling for invalid or already used refresh tokens, returning 401 status with detailed error messages.
+### Changed
+- Enhanced error handling in fetchRecommendedQuestions to handle token refresh failures gracefully.
+- Added timeout and abort controller to similarity search API request for better reliability.
+
+

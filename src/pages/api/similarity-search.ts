@@ -59,6 +59,22 @@ export default async function handler(
     // Initialize Supabase client
     const supabase = createClient(req, res);
 
+    // Validate user session
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error(
+        'Authentication error:',
+        userError?.message || 'No user found'
+      );
+      return res.status(401).json({
+        error: 'Unauthorized: Invalid or expired session. Please log in again.',
+        code: userError?.code || 'invalid_session',
+      });
+    }
+
     // Step 1: Generate embedding for the user's query
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
@@ -104,8 +120,18 @@ export default async function handler(
 
     // Step 5: Return the results
     return res.status(200).json({ results });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in similarity search:', error);
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      error.code === 'refresh_token_already_used'
+    ) {
+      return res.status(401).json({
+        error: 'Unauthorized: Refresh token already used. Please log in again.',
+        code: 'refresh_token_already_used',
+      });
+    }
     return res.status(500).json({ error: 'Internal server error.' });
   }
 }
