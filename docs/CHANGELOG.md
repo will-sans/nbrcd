@@ -128,4 +128,8 @@ This document tracks changes to the database schema for the NBRCD app.
 - Enhanced error handling in fetchRecommendedQuestions to handle token refresh failures gracefully.
 - Added timeout and abort controller to similarity search API request for better reliability.
 
+## 2025-05-26
+### Added
+- Implemented Web App Manifest (`manifest.json`) for PWA support.
+- Added iOS-specific meta tags (`apple-mobile-web-app-capable`, `apple-mobile-web-app-title`) to enable standalone mode.
 
