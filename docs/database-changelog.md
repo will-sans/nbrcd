@@ -113,3 +113,11 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Fixed
 - Removed unwanted literal \n at the end of the "まとめ：" section in learning session replies by adding a replacement step in the extractActions function (app/learning-session/page.tsx). This ensures the summary output is clean and matches the intended format.
 
+## 2025-05-26
+
+### Fixed
+- Resolved Invalid Refresh Token: Already Used error in fetchRecommendedQuestions function by removing X-Refresh-Token header and adding retry logic with session refresh for token-related errors.
+- Improved session management to prevent reuse of invalidated refresh tokens in API requests.
+### Changed
+- enhanced error handling in fetchRecommendedQuestions to handle token refresh failures gracefully.
+- Added timeout and abort controller to similarity search API request for better reliability.

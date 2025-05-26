@@ -563,6 +563,7 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
     }
 
     try {
+      // Force refresh the session to get the latest tokens
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
         console.error("Failed to get session:", sessionError?.message);
@@ -570,49 +571,76 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         return;
       }
 
-      const response = await fetch('/api/similarity-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-          'X-Refresh-Token': session.refresh_token,
-        },
-        body: JSON.stringify({ query }),
-      });
+      // Retry logic for token refresh
+      const maxRetries = 2;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch recommended questions.');
-      }
+          const response = await fetch('/api/similarity-search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ query }),
+            signal: controller.signal,
+          });
 
-      const { results } = await response.json();
-      console.log("Similarity search results:", results);
+          clearTimeout(timeoutId);
 
-      if (!results || results.length === 0) {
-        // Fallback: Fetch random questions if no matches found
-        const { data: fallbackQuestions, error: fallbackError } = await supabase
-          .from('questions')
-          .select('id, philosophy, question, learning, quote, category, book, chapter')
-          .limit(5);
+          if (!response.ok) {
+            const errorData = await response.json();
+            if (errorData.code === 'refresh_token_already_used' && attempt < maxRetries) {
+              console.warn(`Attempt ${attempt}: Refresh token already used, refreshing session...`);
+              const { data: newSession, error: refreshError } = await supabase.auth.refreshSession();
+              if (refreshError || !newSession?.session) {
+                throw new Error("セッションのリフレッシュに失敗しました");
+              }
+              session.access_token = newSession.session.access_token;
+              continue; // Retry with new session
+            }
+            throw new Error(errorData.error || 'Failed to fetch recommended questions.');
+          }
 
-        if (fallbackError) {
-          console.error("Error fetching fallback questions:", fallbackError);
-          setError("おすすめの質問が見つかりませんでした。");
-          return;
+          const { results } = await response.json();
+          console.log("Similarity search results:", results);
+
+          if (!results || results.length === 0) {
+            // Fallback: Fetch random questions if no matches found
+            const { data: fallbackQuestions, error: fallbackError } = await supabase
+              .from('questions')
+              .select('id, philosophy, question, learning, quote, category, book, chapter')
+              .limit(5);
+
+            if (fallbackError) {
+              console.error("Error fetching fallback questions:", fallbackError);
+              setError("おすすめの質問が見つかりませんでした。");
+              return;
+            }
+
+            const fallbackResults = fallbackQuestions.map((q: QuestionFromSupabase) => ({
+              ...q,
+              similarity: 0, // No similarity score for fallback
+            }));
+            setRecommendedQuestions(fallbackResults);
+            setShowRecommendations(true);
+            setError("類似する質問が見つかりませんでした。ランダムな質問を表示します。");
+            return;
+          }
+
+          setRecommendedQuestions(results);
+          setShowRecommendations(true);
+          return; // Success, exit retry loop
+        } catch (err) {
+          if (attempt === maxRetries) {
+            throw err; // Rethrow error on final attempt
+          }
+          console.error(`Attempt ${attempt} failed:`, err);
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
         }
-
-        const fallbackResults = fallbackQuestions.map((q: QuestionFromSupabase) => ({
-          ...q,
-          similarity: 0, // No similarity score for fallback
-        }));
-        setRecommendedQuestions(fallbackResults);
-        setShowRecommendations(true);
-        setError("類似する質問が見つかりませんでした。ランダムな質問を表示します。");
-        return;
       }
-
-      setRecommendedQuestions(results);
-      setShowRecommendations(true);
     } catch (err) {
       console.error("Error fetching recommended questions:", err);
       setError(err instanceof Error ? err.message : "おすすめ質問の取得中にエラーが発生しました。");
@@ -822,7 +850,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
-          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({ query: input.trim() }),
       });
@@ -888,7 +915,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
-          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({
           model: "gpt-4o",
@@ -985,7 +1011,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
-          'X-Refresh-Token': session.refresh_token,
         },
         body: JSON.stringify({
           model: "gpt-4o",
