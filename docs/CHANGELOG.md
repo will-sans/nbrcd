@@ -136,3 +136,14 @@ This document tracks changes to the database schema for the NBRCD app.
 ## 2025-05-28
 ### Changed
 - Replaced deprecated `<meta name="apple-mobile-web-app-capable">` with `<meta name="mobile-web-app-capable">` for PWA compatibility.
+### Removed
+- Removed `backup.json`, `backup.sql`, and `backup250510.json`.
+- Added backup file patterns to `.gitignore`.
+
+## 2025-05-29
+### Added
+- Added Privacy Policy page (`app/privacy-policy/page.tsx`) with content outlining personal information handling, usage purposes, and intellectual property rights.
+- Added a Privacy Policy link to the Settings page menu (`app/settings/page.tsx`) for easy access.
+### Changed
+- Modified Settings page to include a Privacy Policy link in the menu, styled consistently with the app's design.
+

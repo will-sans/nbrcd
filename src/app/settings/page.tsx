@@ -508,6 +508,13 @@ export default function SettingsPage() {
           >
             データ削除
           </button>
+          <a
+            href="/privacy-policy"
+            className="text-blue-500 hover:underline text-center"
+            aria-label="プライバシーポリシー"
+          >
+            プライバシーポリシー
+          </a>
           <button
             onClick={() => setShowMenu(false)}
             className="text-gray-600 hover:underline"
