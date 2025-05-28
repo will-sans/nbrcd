@@ -4,7 +4,7 @@
     "description": "問いで構造に入り、行動に変える哲学OS",
     "icons": [
       {
-        "src": "/nbrcd_logo01.png",
+        "src": "/nbrcd_logo.png",
         "sizes": "512x512",
         "type": "image/png"
       }

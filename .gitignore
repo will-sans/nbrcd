@@ -136,3 +136,8 @@ dist
 # Misc
 *.pem
 next-env.d.ts
+
+# backup files
+*.backup
+*.sql
+*.json.bak

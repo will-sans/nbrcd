@@ -133,3 +133,6 @@ This document tracks changes to the database schema for the NBRCD app.
 - Implemented Web App Manifest (`manifest.json`) for PWA support.
 - Added iOS-specific meta tags (`apple-mobile-web-app-capable`, `apple-mobile-web-app-title`) to enable standalone mode.
 
+## 2025-05-28
+### Changed
+- Replaced deprecated `<meta name="apple-mobile-web-app-capable">` with `<meta name="mobile-web-app-capable">` for PWA compatibility.
