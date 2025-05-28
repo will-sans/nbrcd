@@ -147,3 +147,16 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Changed
 - Modified Settings page to include a Privacy Policy link in the menu, styled consistently with the app's design.
 
+## 2025-05-29
+### Added
+- Added time tracking feature with a new "時間計測" button in the main menu (app/page.tsx).
+- Created /time-tracker page for starting/stopping time tracking with todo integration, category selection, and custom task input (app/time-tracker/page.tsx).
+- Created /schedule page for reviewing daily schedules with a timeline and category-based pie chart using Chart.js (app/schedule/page.tsx).
+- Added time_sessions table in Supabase to store time tracking data (supabase/schema.sql).
+### Changed
+- Updated main menu navigation to include time tracking option (app/page.tsx).
+- Modified time tracker page to only show todos with due dates on or before today, or tasks without due dates created on or before today, to keep the list concise (app/time-tracker/page.tsx).
+- Updated time tracker to automatically mark todos as completed when a time tracking session ends, preventing auth_id errors (app/time-tracker/page.tsx).
+- Fixed time tracker page to correctly display tasks due or created on or before today by adjusting date comparison to account for JST timezone and full day inclusion (app/time-tracker/page.tsx).
+- Updated time tracker categories to ["開発", "会議", "事務", "作業", "雑用", "家事", "移動", "休憩"], made category selection start tracking immediately, and replaced custom task input with custom category input for a more intuitive and quick interface (app/time-tracker/page.tsx).
+

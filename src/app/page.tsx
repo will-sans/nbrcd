@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { FaBars, FaCheck, FaTrophy, FaQuestionCircle, FaBook, FaBrain, FaEdit } from "react-icons/fa";
+import { FaBars, FaCheck, FaTrophy, FaQuestionCircle, FaBook, FaBrain, FaEdit, FaClock } from "react-icons/fa";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { motion } from "framer-motion";
 
@@ -27,7 +27,6 @@ export default function Home() {
       }
       setCurrentUser(user.user_metadata?.username || user.email || "ゲスト");
 
-      // Fetch the user's latest session metadata to get the goal
       const { data: sessionData, error: sessionError } = await supabase
         .from('user_session_metadata')
         .select('goal')
@@ -61,6 +60,7 @@ export default function Home() {
     { name: "タスクリスト", path: "/todo/list", icon: <FaCheck size={24} /> },
     { name: "日誌", path: "/diary/list", icon: <FaBook size={24} /> },
     { name: "ポイント", path: "/points", icon: <FaTrophy size={24} /> },
+    { name: "時間計測", path: "/time-tracker", icon: <FaClock size={24} /> },
   ];
 
   return (
@@ -103,7 +103,6 @@ export default function Home() {
         </div>
       ) : (
         <div className="mb-6 text-center">
-          {/*<h2 className="text-lg font-semibold">こんにちは、{currentUser}さん</h2>*/}
           {userGoal ? (
             <div className="mt-4 p-3 bg-blue-100 rounded-lg flex items-center justify-center space-x-2">
               <p className="text-gray-700">目標：{userGoal}</p>
