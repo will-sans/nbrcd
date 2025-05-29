@@ -174,3 +174,5 @@ This document tracks changes to the database schema for the NBRCD app.
 - Fixed ESLint warning in time tracker page by memoizing stopTracking with useCallback and including it in the useEffect dependency array for component unmount cleanup (app/time-tracker/page.tsx).
 - Fixed TypeScript errors in time tracker page by reordering function declarations to ensure startTracking and stopTracking are defined before their usage in useEffect and event handlers, resolving temporal dead zone and undefined name issues (app/time-tracker/page.tsx).
 - Fixed ESLint warning in time tracker page by using a functional update for setTodos in stopTracking, removing the need for todos in the useCallback dependency array (app/time-tracker/page.tsx).
+- Updated diary list page to show a single day’s work logs sorted by time schedule data from time_sessions, renamed title to "日誌", and simplified UI to a single date picker (app/diary/list/page.tsx).
+- Updated diary input page to prefill time_allocation with time range from time_sessions for completed todos, enhancing integration with time tracking data (app/diary/page.tsx).

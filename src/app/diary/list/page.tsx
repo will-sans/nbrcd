@@ -13,17 +13,37 @@ interface WorkLog {
   learnings: string | null;
   emotion: string | null;
   todo_id: string | null;
+  time_allocation: string | null;
 }
 
 export default function DiaryListPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [emotionFilter, setEmotionFilter] = useState("");
-  const [keyword, setKeyword] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Parse start time from time_allocation (e.g., "10:30" from "10:30–11:00")
+  const parseStartTime = (timeAllocation: string | null): number => {
+    if (!timeAllocation) {
+      console.log("No time_allocation provided, sorting last");
+      return Infinity; // Nulls sort last
+    }
+    // Match HH:MM or H:MM at the start, followed by a separator (e.g., "–")
+    const match = timeAllocation.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) {
+      console.log(`Invalid time_allocation format: ${timeAllocation}, sorting last`);
+      return Infinity; // Invalid format, sort last
+    }
+    const [, hours, minutes] = match; // Skip full match, take hours and minutes
+    const parsedHours = parseInt(hours);
+    const parsedMinutes = parseInt(minutes);
+    if (parsedHours < 0 || parsedHours > 23 || parsedMinutes < 0 || parsedMinutes > 59) {
+      console.log(`Invalid time values: ${hours}:${minutes}, sorting last`);
+      return Infinity; // Invalid time, sort last
+    }
+    return parsedHours * 60 + parsedMinutes; // Convert to minutes since midnight
+  };
 
   useEffect(() => {
     const fetchWorkLogs = async () => {
@@ -35,35 +55,33 @@ export default function DiaryListPage() {
       }
 
       try {
-        let query = supabase
+        // Use date-only filter for the selected date
+        const dateFilter = selectedDate; // YYYY-MM-DD format
+        console.log("Fetching work logs for date:", dateFilter);
+
+        // Fetch work logs for the selected date, casting date to DATE type
+        const { data: logs, error: logError } = await supabase
           .from("work_logs")
-          .select("id, date, task_content, issues, learnings, emotion, todo_id")
+          .select("id, date, task_content, issues, learnings, emotion, todo_id, time_allocation")
           .eq("user_id", user.id)
-          .order("date", { ascending: false })
-          .order("time_allocation", { ascending: false });
+          .eq("date::date", dateFilter);
 
-        // Apply filters
-        if (startDate) {
-          query = query.gte("date", startDate);
-        }
-        if (endDate) {
-          query = query.lte("date", endDate);
-        }
-        if (emotionFilter) {
-          query = query.eq("emotion", emotionFilter);
-        }
-        if (keyword) {
-          query = query.or(`task_content.ilike.%${keyword}%,issues.ilike.%${keyword}%`);
+        if (logError) {
+          throw new Error(logError.message || "作業日誌の取得に失敗しました");
         }
 
-        const { data, error } = await query;
+        // Sort logs by start time of time_allocation
+        const sortedLogs = logs.sort((a, b) => {
+          const timeA = parseStartTime(a.time_allocation);
+          const timeB = parseStartTime(b.time_allocation);
+          if (timeA !== timeB) return timeA - timeB;
+          // If times are equal or both invalid, sort by date
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
 
-        if (error) {
-          throw new Error(error.message || "作業日誌の取得に失敗しました");
-        }
-
-        setWorkLogs(data || []);
-      } catch (err: unknown) {
+        console.log("Fetched and sorted work logs:", sortedLogs);
+        setWorkLogs(sortedLogs);
+      } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "作業日誌の取得に失敗しました";
         console.error("Failed to fetch work logs:", err);
         setErrorMessage(errorMessage);
@@ -81,10 +99,14 @@ export default function DiaryListPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [router, supabase, startDate, endDate, emotionFilter, keyword]);
+  }, [router, supabase, selectedDate]);
 
   const handleRowClick = (logId: number) => {
     router.push(`/diary?page=edit&id=${logId}`);
+  };
+
+  const formatTimeRange = (allocation?: string | null) => {
+    return allocation || "-";
   };
 
   return (
@@ -97,8 +119,7 @@ export default function DiaryListPage() {
         >
           <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-2xl font-bold">日誌一覧</h1>
-        <div className="w-6" />
+        <h1 className="text-2xl font-bold">日誌</h1>
         <button
           onClick={() => router.push("/todo/completed")}
           className="text-gray-600 hover:text-gray-800 text-2xl"
@@ -112,50 +133,15 @@ export default function DiaryListPage() {
         <div className="text-red-500 mb-4">{errorMessage}</div>
       )}
 
-      {/* Filters */}
-      <div className="mb-4 space-y-2">
-        <div>
-          <label className="block text-sm font-medium">開始日</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-full p-2 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium">終了日</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-full p-2 border rounded"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium">感情/体調</label>
-          <select
-            value={emotionFilter}
-            onChange={(e) => setEmotionFilter(e.target.value)}
-            className="w-full p-2 border rounded"
-          >
-            <option value="">すべて</option>
-            <option value="集中できた">集中できた</option>
-            <option value="疲れ気味">疲れ気味</option>
-            <option value="ストレス">ストレス</option>
-            <option value="順調">順調</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium">キーワード検索</label>
-          <input
-            type="text"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="作業内容または課題で検索"
-            className="w-full p-2 border rounded"
-          />
-        </div>
+      {/* Date Picker */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">日付を選択</label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-full p-2 border rounded bg-gray-100"
+        />
       </div>
 
       {/* Table */}
@@ -163,7 +149,7 @@ export default function DiaryListPage() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-200">
-              <th className="p-2 text-sm font-medium">日付</th>
+              <th className="p-2 text-sm font-medium">時間</th>
               <th className="p-2 text-sm font-medium">作業内容</th>
               <th className="p-2 text-sm font-medium">課題</th>
               <th className="p-2 text-sm font-medium">学び</th>
@@ -178,13 +164,7 @@ export default function DiaryListPage() {
                   className="border-b hover:bg-gray-100 cursor-pointer"
                   onClick={() => handleRowClick(log.id)}
                 >
-                  <td className="p-2 text-sm">
-                    {new Date(log.date).toLocaleDateString("ja-JP", {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </td>
+                  <td className="p-2 text-sm">{formatTimeRange(log.time_allocation)}</td>
                   <td className="p-2 text-sm">{log.task_content}</td>
                   <td className="p-2 text-sm">{log.issues || "-"}</td>
                   <td className="p-2 text-sm">{log.learnings || "-"}</td>
@@ -194,7 +174,7 @@ export default function DiaryListPage() {
             ) : (
               <tr>
                 <td colSpan={5} className="p-2 text-center text-gray-500">
-                  作業日誌がありません
+                  この日の作業日誌がありません
                 </td>
               </tr>
             )}

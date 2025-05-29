@@ -76,24 +76,54 @@ export default function DiaryPage() {
         }
       } else {
         // New log mode
+        let timeAllocation = "";
         if (todoId) {
-          const { data, error } = await supabase
+          // Check for existing log
+          const { data: existingLog, error: logError } = await supabase
             .from("work_logs")
             .select("id")
             .eq("todo_id", todoId)
             .eq("user_id", user.id)
             .single();
 
-          if (error && error.code !== "PGRST116") {
-            console.error("Error checking existing log:", error);
+          if (logError && logError.code !== "PGRST116") {
+            console.error("Error checking existing log:", logError);
             setErrorMessage("既存の日報確認に失敗しました");
             return;
           }
 
-          if (data) {
+          if (existingLog) {
             alert("このタスクの日報はすでに登録されています");
             router.push("/todo/completed");
             return;
+          }
+
+          // Fetch time session for todo_id
+          const { data: session, error: sessionError } = await supabase
+            .from("time_sessions")
+            .select("start_time, end_time")
+            .eq("todo_id", todoId)
+            .eq("user_id", user.id)
+            .order("start_time", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (sessionError && sessionError.code !== "PGRST116") {
+            console.error("Error fetching time session:", sessionError);
+            setErrorMessage("時間データの取得に失敗しました");
+            return;
+          }
+
+          if (session && session.start_time && session.end_time) {
+            timeAllocation = `${new Date(session.start_time).toLocaleTimeString("ja-JP", {
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Tokyo",
+            })}–${new Date(session.end_time).toLocaleTimeString("ja-JP", {
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Tokyo",
+            })}`;
           }
         }
 
@@ -111,6 +141,7 @@ export default function DiaryPage() {
           todo_id: todoId,
           task_content: taskContent,
           date: date || new Date().toISOString().split("T")[0],
+          time_allocation: timeAllocation,
         }));
       }
     };
