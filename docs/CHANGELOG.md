@@ -161,4 +161,8 @@ This document tracks changes to the database schema for the NBRCD app.
 - Updated time tracker categories to ["開発", "会議", "事務", "作業", "雑用", "家事", "移動", "休憩"], made category selection start tracking immediately, and replaced custom task input with custom category input for a more intuitive and quick interface (app/time-tracker/page.tsx).
 - Updated question_id_rule.md to add book of 05Collins 02 "ビジョナリー・カンパニー②飛躍の法則"
 - Updated FAQ contents with PWA add to home description.
-
+### Added
+- Added Terms of Service link to the settings page menu, linking to a new `/terms-of-service` page (#ISSUE_NUMBER).
+- Created a new Terms of Service page at `/terms-of-service` with placeholder content for user agreement terms 
+### Changed
+- Revised Terms of Service page (app/terms-of-service/page.tsx) to match the structure, styling, and navigation of the Privacy Policy page, including a back button to settings and consistent content formatting (#ISSUE_NUMBER).

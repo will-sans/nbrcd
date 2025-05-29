@@ -515,6 +515,13 @@ export default function SettingsPage() {
           >
             プライバシーポリシー
           </a>
+          <a
+            href="/terms-of-service"
+            className="text-blue-500 hover:underline text-center"
+            aria-label="利用規約"
+          >
+            利用規約
+          </a>          
           <button
             onClick={() => setShowMenu(false)}
             className="text-gray-600 hover:underline"
