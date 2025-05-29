@@ -176,3 +176,6 @@ This document tracks changes to the database schema for the NBRCD app.
 - Fixed ESLint warning in time tracker page by using a functional update for setTodos in stopTracking, removing the need for todos in the useCallback dependency array (app/time-tracker/page.tsx).
 - Updated diary list page to show a single day’s work logs sorted by time schedule data from time_sessions, renamed title to "日誌", and simplified UI to a single date picker (app/diary/list/page.tsx).
 - Updated diary input page to prefill time_allocation with time range from time_sessions for completed todos, enhancing integration with time tracking data (app/diary/page.tsx).
+- Fixed diary list page to display only the selected date’s work logs (e.g., May 29, 2025) using date-only filtering and to show time_allocation from work_logs instead of time_sessions for the "時間" column, ensuring correct data display (app/diary/list/page.tsx).
+- Fixed TypeScript error in diary list page by replacing nullsLast with nullsFirst: false in the Supabase order method, ensuring a clean build (app/diary/list/page.tsx).
+- Fixed ESLint error in diary list page by removing unused _ variable in parseStartTime and improved sorting by parsing time_allocation start times more robustly, ensuring chronological order (e.g., 9:00–11:00 before 10:30–11:00) (app/diary/list/page.tsx).
