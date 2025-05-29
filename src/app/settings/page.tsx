@@ -461,7 +461,7 @@ export default function SettingsPage() {
             <div>
               <h3 className="text-lg font-semibold">Q: Safariで複数のタブが開いてしまうのはなぜですか？</h3>
               <p className="text-gray-700">
-                A: NBRCDはPWA（プログレッシブウェブアプリ）として動作します。Safariでご利用後、必ずタブを閉じてアプリを終了してください。これにより、不要なタブが溜まるのを防ぎ、快適にご利用いただけます。
+                A: NBRCDはPWA（プログレッシブウェブアプリ）として動作します。Safariで共有（画面下真ん中にある四角に上矢印のマーク）→ホーム画面に追加すると、アプリとしてご利用いただけますので、Safaiで複数開く問題は起こらなくなります。
               </p>
             </div>
             <div>

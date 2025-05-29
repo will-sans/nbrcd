@@ -159,4 +159,6 @@ This document tracks changes to the database schema for the NBRCD app.
 - Updated time tracker to automatically mark todos as completed when a time tracking session ends, preventing auth_id errors (app/time-tracker/page.tsx).
 - Fixed time tracker page to correctly display tasks due or created on or before today by adjusting date comparison to account for JST timezone and full day inclusion (app/time-tracker/page.tsx).
 - Updated time tracker categories to ["開発", "会議", "事務", "作業", "雑用", "家事", "移動", "休憩"], made category selection start tracking immediately, and replaced custom task input with custom category input for a more intuitive and quick interface (app/time-tracker/page.tsx).
+- Updated question_id_rule.md to add book of 05Collins 02 "ビジョナリー・カンパニー②飛躍の法則"
+- Updated FAQ contents with PWA add to home description.
 
