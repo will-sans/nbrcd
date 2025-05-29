@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
-import { FaArrowLeft, FaPlay, FaStop, FaChartPie } from "react-icons/fa";
+import { FaArrowLeft, FaPlay, FaStop, FaChartPie, FaTrash } from "react-icons/fa";
 
 interface Todo {
   id: string;
@@ -38,6 +38,127 @@ export default function TimeTrackerPage() {
 
   const categories = ["開発", "会議", "事務", "作業", "雑用", "家事", "移動", "休憩"];
 
+  const startTracking = useCallback(
+    async (task: string, category: string, todo_id?: string) => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.push("/login");
+        return;
+      }
+
+      const session: TimeSession = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        task,
+        category,
+        start_time: new Date().toISOString(),
+        todo_id,
+      };
+
+      try {
+        const { error } = await supabase.from("time_sessions").insert(session);
+        if (error) throw error;
+
+        setCurrentSession(session);
+        setStartTime(new Date());
+        setIsTracking(true);
+        setCustomCategory("");
+      } catch (err) {
+        console.error("Failed to start tracking:", err);
+        setError("時間計測の開始に失敗しました");
+      }
+    },
+    [supabase, router]
+  );
+
+  const stopTracking = useCallback(
+    async (customEndTime?: Date) => {
+      if (!currentSession || !startTime) return;
+
+      const endTime = customEndTime || new Date();
+      const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.warn("User not authenticated during stopTracking");
+          setIsTracking(false);
+          setStartTime(null);
+          setElapsedTime(0);
+          setCurrentSession(null);
+          return;
+        }
+
+        const { error: sessionError } = await supabase
+          .from("time_sessions")
+          .update({
+            end_time: endTime.toISOString(),
+            duration: duration > 0 ? duration : 0, // Prevent negative duration
+          })
+          .eq("id", currentSession.id)
+          .eq("user_id", user.id);
+
+        if (sessionError) throw sessionError;
+
+        if (currentSession.todo_id) {
+          const { error: todoError } = await supabase
+            .from("todos")
+            .update({
+              completed: true,
+              completed_date: endTime.toISOString(),
+            })
+            .eq("id", currentSession.todo_id)
+            .eq("user_id", user.id);
+
+          if (todoError) throw todoError;
+
+          setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== currentSession.todo_id));
+        }
+
+        setIsTracking(false);
+        setStartTime(null);
+        setElapsedTime(0);
+        setCurrentSession(null);
+      } catch (err) {
+        console.error("Failed to stop tracking:", err);
+        setError("時間計測の終了またはタスクの完了に失敗しました");
+        setIsTracking(false);
+        setStartTime(null);
+        setElapsedTime(0);
+        setCurrentSession(null);
+      }
+    },
+    [currentSession, startTime, supabase]
+  );
+
+  const discardSession = useCallback(async () => {
+    if (!currentSession) return;
+
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        router.push("/login");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("time_sessions")
+        .delete()
+        .eq("id", currentSession.id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      setIsTracking(false);
+      setStartTime(null);
+      setElapsedTime(0);
+      setCurrentSession(null);
+    } catch (err) {
+      console.error("Failed to discard session:", err);
+      setError("セッションの破棄に失敗しました");
+    }
+  }, [currentSession, supabase, router]);
+
   const fetchTodos = useCallback(async () => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
@@ -70,8 +191,40 @@ export default function TimeTrackerPage() {
     }
   }, [supabase, router]);
 
+  const fetchActiveSession = useCallback(async () => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      router.push("/login");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("time_sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .is("end_time", null)
+        .order("start_time", { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const session = data[0];
+        setCurrentSession(session);
+        setStartTime(new Date(session.start_time));
+        setIsTracking(true);
+        setElapsedTime(Math.floor((Date.now() - new Date(session.start_time).getTime()) / 1000));
+      }
+    } catch (err) {
+      console.error("Failed to fetch active session:", err);
+      setError("進行中のセッションの取得に失敗しました");
+    }
+  }, [supabase, router]);
+
   useEffect(() => {
     fetchTodos();
+    fetchActiveSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -82,7 +235,7 @@ export default function TimeTrackerPage() {
     );
 
     return () => subscription.unsubscribe();
-  }, [fetchTodos, supabase, router]);
+  }, [fetchTodos, fetchActiveSession, supabase, router]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -94,84 +247,14 @@ export default function TimeTrackerPage() {
     return () => clearInterval(interval);
   }, [isTracking, startTime]);
 
-  const startTracking = async (task: string, category: string, todo_id?: string) => {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      router.push("/login");
-      return;
-    }
-
-    const session: TimeSession = {
-      id: crypto.randomUUID(),
-      user_id: user.id,
-      task,
-      category,
-      start_time: new Date().toISOString(),
-      todo_id,
+  // Cleanup on component unmount (in-app navigation)
+  useEffect(() => {
+    return () => {
+      if (isTracking && currentSession && startTime) {
+        stopTracking();
+      }
     };
-
-    try {
-      const { error } = await supabase.from("time_sessions").insert(session);
-      if (error) throw error;
-
-      setCurrentSession(session);
-      setStartTime(new Date());
-      setIsTracking(true);
-      setCustomCategory("");
-    } catch (err) {
-      console.error("Failed to start tracking:", err);
-      setError("時間計測の開始に失敗しました");
-    }
-  };
-
-  const stopTracking = async () => {
-    if (!currentSession || !startTime) return;
-
-    const endTime = new Date();
-    const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
-
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        router.push("/login");
-        return;
-      }
-
-      const { error: sessionError } = await supabase
-        .from("time_sessions")
-        .update({
-          end_time: endTime.toISOString(),
-          duration,
-        })
-        .eq("id", currentSession.id)
-        .eq("user_id", user.id);
-
-      if (sessionError) throw sessionError;
-
-      if (currentSession.todo_id) {
-        const { error: todoError } = await supabase
-          .from("todos")
-          .update({
-            completed: true,
-            completed_date: endTime.toISOString(),
-          })
-          .eq("id", currentSession.todo_id)
-          .eq("user_id", user.id);
-
-        if (todoError) throw todoError;
-
-        setTodos(todos.filter((todo) => todo.id !== currentSession.todo_id));
-      }
-
-      setIsTracking(false);
-      setStartTime(null);
-      setElapsedTime(0);
-      setCurrentSession(null);
-    } catch (err) {
-      console.error("Failed to stop tracking:", err);
-      setError("時間計測の終了またはタスクの完了に失敗しました");
-    }
-  };
+  }, [isTracking, currentSession, startTime, stopTracking]);
 
   const handleCategorySelect = (category: string) => {
     if (isTracking) return;
@@ -223,12 +306,20 @@ export default function TimeTrackerPage() {
         <div className="mb-6 text-center">
           <p className="text-lg font-semibold">計測中: {currentSession.task}</p>
           <p className="text-2xl font-bold mt-2">{formatTime(elapsedTime)}</p>
-          <button
-            onClick={stopTracking}
-            className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-          >
-            <FaStop className="inline mr-2" /> 停止
-          </button>
+          <div className="mt-4 flex justify-center space-x-4">
+            <button
+              onClick={() => stopTracking()}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 flex items-center"
+            >
+              <FaStop className="mr-2" /> 終了
+            </button>
+            <button
+              onClick={discardSession}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 flex items-center"
+            >
+              <FaTrash className="mr-2" /> 破棄
+            </button>
+          </div>
         </div>
       )}
 

@@ -166,3 +166,11 @@ This document tracks changes to the database schema for the NBRCD app.
 - Created a new Terms of Service page at `/terms-of-service` with placeholder content for user agreement terms 
 ### Changed
 - Revised Terms of Service page (app/terms-of-service/page.tsx) to match the structure, styling, and navigation of the Privacy Policy page, including a back button to settings and consistent content formatting (#ISSUE_NUMBER).
+### Changed
+- Added auto-stop functionality to end time tracking sessions when navigating away from the time tracker page, preventing stale records and ensuring accurate measurements (app/time-tracker/page.tsx).
+- Fixed TypeScript errors in time tracker page by replacing router.events with beforeunload and component unmount cleanup for auto-stopping sessions (app/time-tracker/page.tsx).
+- Fixed pie chart date filtering in schedule page to correctly group sessions by JST date, ensuring data from May 29, 2025, 00:00 JST onward appears in the May 29 pie chart (app/schedule/page.tsx).
+- Replaced beforeunload with session resumption and manual end/discard options in time tracker page to handle app closure scenarios, ensuring sessions are not left as "進行中" indefinitely (app/time-tracker/page.tsx).
+- Fixed ESLint warning in time tracker page by memoizing stopTracking with useCallback and including it in the useEffect dependency array for component unmount cleanup (app/time-tracker/page.tsx).
+- Fixed TypeScript errors in time tracker page by reordering function declarations to ensure startTracking and stopTracking are defined before their usage in useEffect and event handlers, resolving temporal dead zone and undefined name issues (app/time-tracker/page.tsx).
+- Fixed ESLint warning in time tracker page by using a functional update for setTodos in stopTracking, removing the need for todos in the useCallback dependency array (app/time-tracker/page.tsx).
