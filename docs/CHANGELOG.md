@@ -184,4 +184,5 @@ This document tracks changes to the database schema for the NBRCD app.
 - Set default due date to today's date when adding a new task in the TodoListPage component.
   - Modified `handleAddTask` to include `dueDate` set to `new Date().toISOString().split('T')[0]` in the new todo object.
   - Updated Supabase insert to save `due_date` field.
-  
+### Fixed
+- Corrected date range in `src/app/schedule/page.tsx` to align with JST midnight boundaries, ensuring sessions from 00:00 JST to 23:59 JST are displayed under the correct date.

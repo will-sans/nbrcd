@@ -38,17 +38,32 @@ export default function SchedulePage() {
       }
 
       try {
-        const startOfDay = new Date(selectedDate).toISOString();
+        const selectedDateObj = new Date(selectedDate);
+        const startOfDay = new Date(
+          Date.UTC(
+            selectedDateObj.getFullYear(),
+            selectedDateObj.getMonth(),
+            selectedDateObj.getDate(),
+            0, 0, 0
+          )
+        );
+        startOfDay.setHours(startOfDay.getHours() - 9); // Adjust UTC to JST
         const endOfDay = new Date(
-          new Date(selectedDate).setDate(new Date(selectedDate).getDate() + 1)
-        ).toISOString();
+          Date.UTC(
+            selectedDateObj.getFullYear(),
+            selectedDateObj.getMonth(),
+            selectedDateObj.getDate() + 1,
+            0, 0, 0
+          )
+        );
+        endOfDay.setHours(endOfDay.getHours() - 9); // Adjust UTC to JST
 
         const { data, error } = await supabase
           .from("time_sessions")
           .select("*")
           .eq("user_id", user.id)
-          .gte("start_time", startOfDay)
-          .lt("start_time", endOfDay)
+          .gte("start_time", startOfDay.toISOString())
+          .lt("start_time", endOfDay.toISOString())
           .order("start_time", { ascending: true });
 
         if (error) throw error;
