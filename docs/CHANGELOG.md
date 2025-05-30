@@ -186,3 +186,17 @@ This document tracks changes to the database schema for the NBRCD app.
   - Updated Supabase insert to save `due_date` field.
 ### Fixed
 - Corrected date range in `src/app/schedule/page.tsx` to align with JST midnight boundaries, ensuring sessions from 00:00 JST to 23:59 JST are displayed under the correct date.
+### Added
+- Implemented priority functionality for todos
+- Added priority field to Todo and SupabaseTodo interfaces
+- Added UI controls (up/down arrows) to adjust todo priority
+- Modified todo sorting to prioritize by priority within date groups
+- Added priority handling in database operations (fetch, add, update)
+- Updated todo list display to show priority value
+### Changed
+- Modified fetchTodos query to include priority in sorting
+- Updated grouped todos sorting logic to consider priority first
+- Added priority field to new todo creation with default value of 0
+- Updated priority display to show between up/down buttons instead of in todo text
+- Changed priority up button to red and down button to green
+- Updated aria-labels to use "優先度" instead of "優先順位"

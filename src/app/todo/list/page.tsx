@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { v4 as uuidv4 } from "uuid";
-import { FaArrowLeft } from "react-icons/fa";
-
+import { FaArrowLeft, FaArrowUp, FaArrowDown } from "react-icons/fa";
 
 interface Todo {
   id: string;
@@ -14,6 +13,7 @@ interface Todo {
   date: string;
   dueDate?: string;
   completedDate?: string;
+  priority: number; // Added priority field
 }
 
 interface SupabaseTodo {
@@ -24,6 +24,7 @@ interface SupabaseTodo {
   due_date?: string;
   completed_date?: string;
   user_id: string;
+  priority: number; // Added priority field
 }
 
 export default function TodoListPage() {
@@ -54,6 +55,7 @@ export default function TodoListPage() {
           .eq('user_id', user.id)
           .eq('completed', false)
           .order('due_date', { ascending: true, nullsFirst: false })
+          .order('priority', { ascending: false }) // Added priority ordering
           .order('date', { ascending: true });
 
         if (error) {
@@ -67,6 +69,7 @@ export default function TodoListPage() {
           date: todo.date,
           dueDate: todo.due_date,
           completedDate: todo.completed_date,
+          priority: todo.priority, // Added priority mapping
         })) || [];
 
         setTodos(mappedData);
@@ -142,7 +145,6 @@ export default function TodoListPage() {
       return;
     }
 
-    // Get today's date in YYYY-MM-DD format
     const today = new Date().toISOString().split('T')[0];
 
     const newTodo: Todo = {
@@ -150,7 +152,8 @@ export default function TodoListPage() {
       text: newTask,
       completed: false,
       date: new Date().toISOString(),
-      dueDate: today, // Set default due date to today
+      dueDate: today,
+      priority: 0, // Default priority
     };
 
     try {
@@ -162,7 +165,8 @@ export default function TodoListPage() {
           text: newTodo.text,
           completed: newTodo.completed,
           date: newTodo.date,
-          due_date: newTodo.dueDate, // Include due_date in the insert
+          due_date: newTodo.dueDate,
+          priority: newTodo.priority,
         });
 
       if (error) {
@@ -238,6 +242,38 @@ export default function TodoListPage() {
       }, 300);
     } catch (err) {
       console.error("Failed to delete task:", err);
+    }
+  };
+
+  const handlePriorityChange = async (id: string, direction: 'up' | 'down') => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.warn('No user found in Supabase Auth');
+      router.push("/login");
+      return;
+    }
+
+    const todo = todos.find(t => t.id === id);
+    if (!todo) return;
+
+    const newPriority = direction === 'up' ? todo.priority + 1 : Math.max(0, todo.priority - 1);
+
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({
+          priority: newPriority,
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        throw new Error(error.message || '優先度の更新に失敗しました');
+      }
+
+      setTodos(todos.map(t => t.id === id ? { ...t, priority: newPriority } : t));
+    } catch (err) {
+      console.error("Failed to update priority:", err);
     }
   };
 
@@ -323,11 +359,17 @@ export default function TodoListPage() {
     .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
     .reduce((acc: { [key: string]: Todo[] }, dateKey) => {
       acc[dateKey] = groupedTodos[dateKey].sort((a, b) => {
+        // Sort by priority (descending) first
+        if (a.priority !== b.priority) {
+          return b.priority - a.priority;
+        }
+        // Then by due date if available
         if (a.dueDate && b.dueDate) {
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         }
         if (a.dueDate) return -1;
         if (b.dueDate) return 1;
+        // Finally by creation date
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
       return acc;
@@ -402,8 +444,25 @@ export default function TodoListPage() {
                         onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
                         className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
                       >
-                        {todo.text}
+                        {todo.text} 
                       </span>
+                    </div>
+                    <div className="flex items-center space-x-2 mr-2">
+                      <button
+                        onClick={() => handlePriorityChange(todo.id, 'up')}
+                        className="text-red-500 hover:text-red-700"
+                        aria-label="優先度を上げる"
+                      >
+                        <FaArrowUp />
+                      </button>
+                      {todo.priority}
+                      <button
+                        onClick={() => handlePriorityChange(todo.id, 'down')}
+                        className="text-green-500 hover:text-green-700"
+                        aria-label="優先度を下げる"
+                      >
+                        <FaArrowDown />
+                      </button>
                     </div>
                     <div className="absolute right-0 h-full flex items-center">
                       <button
