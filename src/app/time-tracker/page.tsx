@@ -12,6 +12,7 @@ interface Todo {
   date: string;
   due_date?: string;
   user_id: string;
+  priority: number; // Added priority field
 }
 
 interface TimeSession {
@@ -36,7 +37,7 @@ export default function TimeTrackerPage() {
   const [currentSession, setCurrentSession] = useState<TimeSession | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const categories = ["開発", "会議", "事務", "作業", "雑用", "家事", "移動", "休憩"];
+  const categories = ["仕事", "会議", "日常", "学習", "家事", "移動", "健康", "休憩"];
 
   const startTracking = useCallback(
     async (task: string, category: string, todo_id?: string) => {
@@ -179,6 +180,7 @@ export default function TimeTrackerPage() {
         .eq("completed", false)
         .or(`due_date.lte.${endOfTodayUTC},and(due_date.is.null,date.lte.${endOfTodayUTC})`)
         .order("due_date", { ascending: true, nullsFirst: false })
+        .order("priority", { ascending: false }) // Added priority ordering
         .order("date", { ascending: true });
 
       if (error) throw error;
@@ -335,7 +337,9 @@ export default function TimeTrackerPage() {
                       onClick={() => handleTodoSelect(todo)}
                       className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200"
                     >
-                      {todo.text}
+                      <div className="flex items-center space-x-2 mr-2">
+                        {todo.text}  
+                      </div>
                     </button>
                   </li>
                 ))}

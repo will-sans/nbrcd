@@ -192,7 +192,8 @@ This document tracks changes to the database schema for the NBRCD app.
 - Added UI controls (up/down arrows) to adjust todo priority
 - Modified todo sorting to prioritize by priority within date groups
 - Added priority handling in database operations (fetch, add, update)
-- Updated todo list display to show priority value
+- Added priority sorting to TimeTrackerPage todo list
+- Updated TimeTrackerPage to display priority value next to todos
 ### Changed
 - Modified fetchTodos query to include priority in sorting
 - Updated grouped todos sorting logic to consider priority first
@@ -200,3 +201,4 @@ This document tracks changes to the database schema for the NBRCD app.
 - Updated priority display to show between up/down buttons instead of in todo text
 - Changed priority up button to red and down button to green
 - Updated aria-labels to use "優先度" instead of "優先順位"
+- Updated TimeTrackerPage categories to ["仕事", "会議", "日常", "学習", "家事", "移動", "健康", "休憩"]
