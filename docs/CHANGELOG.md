@@ -179,3 +179,9 @@ This document tracks changes to the database schema for the NBRCD app.
 - Fixed diary list page to display only the selected date’s work logs (e.g., May 29, 2025) using date-only filtering and to show time_allocation from work_logs instead of time_sessions for the "時間" column, ensuring correct data display (app/diary/list/page.tsx).
 - Fixed TypeScript error in diary list page by replacing nullsLast with nullsFirst: false in the Supabase order method, ensuring a clean build (app/diary/list/page.tsx).
 - Fixed ESLint error in diary list page by removing unused _ variable in parseStartTime and improved sorting by parsing time_allocation start times more robustly, ensuring chronological order (e.g., 9:00–11:00 before 10:30–11:00) (app/diary/list/page.tsx).
+## 2025-05-30
+### Added
+- Set default due date to today's date when adding a new task in the TodoListPage component.
+  - Modified `handleAddTask` to include `dueDate` set to `new Date().toISOString().split('T')[0]` in the new todo object.
+  - Updated Supabase insert to save `due_date` field.
+  

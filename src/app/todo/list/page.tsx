@@ -142,11 +142,15 @@ export default function TodoListPage() {
       return;
     }
 
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0];
+
     const newTodo: Todo = {
       id: uuidv4(),
       text: newTask,
       completed: false,
       date: new Date().toISOString(),
+      dueDate: today, // Set default due date to today
     };
 
     try {
@@ -158,6 +162,7 @@ export default function TodoListPage() {
           text: newTodo.text,
           completed: newTodo.completed,
           date: newTodo.date,
+          due_date: newTodo.dueDate, // Include due_date in the insert
         });
 
       if (error) {
