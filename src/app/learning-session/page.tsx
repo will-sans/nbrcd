@@ -29,17 +29,6 @@ interface SessionMetadata {
   goal: string | null;
 }
 
-interface SimilaritySearchResult {
-  id: number;
-  question: string;
-  learning: string;
-  quote: string;
-  category: string;
-  book: string;
-  chapter: string;
-  similarity: number;
-}
-
 interface RecommendedQuestion {
   id: number;
   question: string;
