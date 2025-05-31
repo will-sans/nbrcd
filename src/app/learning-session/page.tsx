@@ -843,34 +843,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       throw new Error("セッションの取得に失敗しました");
     }
 
-    let relevantContext = '';
-    try {
-      const response = await fetch('/api/similarity-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ query: input.trim() }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Similarity search failed');
-      }
-
-      const { results } = await response.json();
-      relevantContext = results
-        .map((match: SimilaritySearchResult) => 
-          `Relevant Quote: "${match.quote}"\nLearning: ${match.learning}\nSource: ${match.book}, ${match.chapter}`
-        )
-        .join('\n\n');
-    } catch (error) {
-      console.error('Error during similarity search:', error);
-      relevantContext = 'No relevant context found.';
-    }
-
-    const userSummary = sessionMetadata?.summary || `${currentUser}さんのメタデータ：まだセッション履歴がありません。`;
-
     const prompt = await getPromptById(supabase, 4);
     if (!prompt) {
       setError('プロンプトの読み込みに失敗しました');
@@ -879,8 +851,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
 
     const systemPromptWithQuestion = prompt.prompt_text
       .replace(/{{philosopherName}}/g, selectedPhilosopher.name)
-      .replace('{{relevantContext}}', relevantContext)
-      .replace('{{userSummary}}', userSummary)
       .replace('{{learning}}', dailyQuestion.learning)
       .replace('{{quote}}', dailyQuestion.quote)
       .replace('{{question}}', dailyQuestion.question)
