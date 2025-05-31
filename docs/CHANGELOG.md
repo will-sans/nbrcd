@@ -223,4 +223,14 @@ This document tracks changes to the database schema for the NBRCD app.
   - Added `sessions` table insertion to `saveActionToLocalStorageAndRedirect`, ensuring a single, complete session record is saved only when an action plan is selected.
   - Impact: Reduces unnecessary data storage in the `sessions` table, eliminating empty and duplicate records while maintaining session data integrity.
   - Testing: Verify that the `sessions` table receives one record per completed session, with complete conversation data, and no records for incomplete sessions. Confirm that logging, todo saving, and metadata functions remain unaffected.
-  
+
+## 2025-06-01
+### Changed
+- Enhanced `/api/similarity-search` to explicitly set Supabase session using `access_token` and `refresh_token` from headers to improve session validation reliability.
+- Updated `fetchRecommendedQuestions` in `LearningSession` to proactively refresh the Supabase session before making API calls, ensuring fresh tokens are used and simplifying retry logic.
+### Fixed
+- Resolved TypeScript error (code 1472) in `fetchRecommendedQuestions` by removing unnecessary inner `try` block and merging logic into the outer `try-catch`, ensuring proper error handling and compilation.
+### Changed
+- Updated `getSupabaseClient` to explicitly set `storage` to `localStorage` for client-side session persistence and added `storageKey` for consistent token storage.
+### Added
+- Added `TOKEN_REFRESHED` event handling in `LearningSession` to update the session when Supabase automatically refreshes tokens.

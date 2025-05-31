@@ -59,6 +59,38 @@ export default async function handler(
     // Initialize Supabase client
     const supabase = createClient(req, res);
 
+    // Extract tokens from headers
+    const authHeader = req.headers.authorization;
+    const refreshToken = req.headers['x-refresh-token'] as string;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('No Authorization header provided or invalid format');
+      return res
+        .status(401)
+        .json({ error: 'Authentication token missing or invalid' });
+    }
+
+    const accessToken = authHeader.split(' ')[1];
+
+    if (!refreshToken) {
+      console.error('No refresh token provided');
+      return res.status(401).json({ error: 'Refresh token missing' });
+    }
+
+    // Set session explicitly
+    const { error: setAuthError } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (setAuthError) {
+      console.error('Failed to set session:', setAuthError.message);
+      return res.status(401).json({
+        error: `Failed to set session: ${setAuthError.message}`,
+        code: setAuthError.code || 'session_set_error',
+      });
+    }
+
     // Validate user session
     const {
       data: { user },

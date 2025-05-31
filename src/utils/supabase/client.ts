@@ -31,6 +31,8 @@ export const getSupabaseClient = (): SupabaseClient => {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? localStorage : undefined,
+        storageKey: 'supabase.auth.token',
       },
     });
   }

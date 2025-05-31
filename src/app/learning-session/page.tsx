@@ -178,6 +178,9 @@ export default function LearningSession() {
       console.log("Auth state changed in LearningSession:", event, session);
       if (event === 'SIGNED_IN' && session) {
         checkUser();
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        console.log("Token refreshed, updating session");
+        checkUser();        
       } else if (event === 'SIGNED_OUT' || !session) {
         router.push("/login");
       }
@@ -552,84 +555,65 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
     }
 
     try {
-      // Force refresh the session to get the latest tokens
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error("Failed to get session:", sessionError?.message);
-        setError("セッションの取得に失敗しました。");
+      // Proactively refresh the session
+      const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshedSession?.session) {
+        console.error("Failed to refresh session:", refreshError?.message);
+        setError("セッションのリフレッシュに失敗しました。ログインし直してください。");
+        await supabase.auth.signOut();
+        router.push("/login");
         return;
       }
 
-      // Retry logic for token refresh
-      const maxRetries = 2;
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-          const response = await fetch('/api/similarity-search', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({ query }),
-            signal: controller.signal,
-          });
+      const response = await fetch('/api/similarity-search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${refreshedSession.session.access_token}`,
+          'X-Refresh-Token': refreshedSession.session.refresh_token,
+        },
+        body: JSON.stringify({ query }),
+        signal: controller.signal,
+      });
 
-          clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            if (errorData.code === 'refresh_token_already_used' && attempt < maxRetries) {
-              console.warn(`Attempt ${attempt}: Refresh token already used, refreshing session...`);
-              const { data: newSession, error: refreshError } = await supabase.auth.refreshSession();
-              if (refreshError || !newSession?.session) {
-                throw new Error("セッションのリフレッシュに失敗しました");
-              }
-              session.access_token = newSession.session.access_token;
-              continue; // Retry with new session
-            }
-            throw new Error(errorData.error || 'Failed to fetch recommended questions.');
-          }
-
-          const { results } = await response.json();
-          console.log("Similarity search results:", results);
-
-          if (!results || results.length === 0) {
-            // Fallback: Fetch random questions if no matches found
-            const { data: fallbackQuestions, error: fallbackError } = await supabase
-              .from('questions')
-              .select('id, philosophy, question, learning, quote, category, book, chapter')
-              .limit(5);
-
-            if (fallbackError) {
-              console.error("Error fetching fallback questions:", fallbackError);
-              setError("おすすめの質問が見つかりませんでした。");
-              return;
-            }
-
-            const fallbackResults = fallbackQuestions.map((q: QuestionFromSupabase) => ({
-              ...q,
-              similarity: 0, // No similarity score for fallback
-            }));
-            setRecommendedQuestions(fallbackResults);
-            setShowRecommendations(true);
-            setError("類似する質問が見つかりませんでした。ランダムな質問を表示します。");
-            return;
-          }
-
-          setRecommendedQuestions(results);
-          setShowRecommendations(true);
-          return; // Success, exit retry loop
-        } catch (err) {
-          if (attempt === maxRetries) {
-            throw err; // Rethrow error on final attempt
-          }
-          console.error(`Attempt ${attempt} failed:`, err);
-          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch recommended questions.');
       }
+
+      const { results } = await response.json();
+      console.log("Similarity search results:", results);
+
+      if (!results || results.length === 0) {
+        // Fallback: Fetch random questions if no matches found
+        const { data: fallbackQuestions, error: fallbackError } = await supabase
+          .from('questions')
+          .select('id, philosophy, question, learning, quote, category, book, chapter')
+          .limit(5);
+
+        if (fallbackError) {
+          console.error("Error fetching fallback questions:", fallbackError);
+          setError("おすすめの質問が見つかりませんでした。");
+          return;
+        }
+
+        const fallbackResults = fallbackQuestions.map((q: QuestionFromSupabase) => ({
+          ...q,
+          similarity: 0, // No similarity score for fallback
+        }));
+        setRecommendedQuestions(fallbackResults);
+        setShowRecommendations(true);
+        setError("類似する質問が見つかりませんでした。ランダムな質問を表示します。");
+        return;
+      }
+
+      setRecommendedQuestions(results);
+      setShowRecommendations(true);
     } catch (err) {
       console.error("Error fetching recommended questions:", err);
       setError(err instanceof Error ? err.message : "おすすめ質問の取得中にエラーが発生しました。");
