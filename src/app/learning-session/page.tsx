@@ -730,18 +730,18 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       }
       console.log("Successfully saved log to server:", log);
 
-      const { error: sessionError } = await supabase
-        .from('sessions')
-        .insert({
-          user_id: user.id,
-          conversation: messages,
-          analysis: { sessionCount: messages.length },
-          score: messages.length * 10,
-        });
+      // const { error: sessionError } = await supabase
+      //   .from('sessions')
+      //   .insert({
+      //     user_id: user.id,
+      //     conversation: messages,
+      //     analysis: { sessionCount: messages.length },
+      //     score: messages.length * 10,
+      //   });
 
-      if (sessionError) {
-        console.error("Failed to save session:", sessionError);
-      }
+      // if (sessionError) {
+      //   console.error("Failed to save session:", sessionError);
+      // }
     } catch (error) {
       console.error("Failed to save log:", error);
     }
@@ -775,6 +775,19 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
 
       console.log('Todo saved successfully:', action);
       await saveLog("end_session", { action: "Session ended after action plan selection" });
+
+      const { error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: user.id,
+          conversation: messages,
+          analysis: { sessionCount: messages.length },
+          score: messages.length * 10,
+        });
+
+      if (sessionError) {
+        console.error("Failed to save session:", sessionError);
+      }
 
       saveSessionMetadata(action).catch((err) => {
         console.error("Failed to save session metadata in background:", err);

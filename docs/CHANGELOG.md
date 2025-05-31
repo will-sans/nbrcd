@@ -217,3 +217,10 @@ This document tracks changes to the database schema for the NBRCD app.
   - Updated prompt description to reflect the exclusion of both `relevantContext` and `userSummary` for cleaner output.
   - Impact: Further streamlines the prompt and session logic, reducing unnecessary metadata processing and simplifying the system prompt construction.
   - Testing: Verify that learning sessions function correctly without `userSummary`, ensuring proper message handling, action plan generation, and metadata modal display.
+  ### Changed
+- **Learning Session: Consolidated Session Saving to End of Session**
+  - Modified `app/learning-session/page.tsx` to remove `sessions` table insertion from the `saveLog` function, which was causing empty and duplicate records.
+  - Added `sessions` table insertion to `saveActionToLocalStorageAndRedirect`, ensuring a single, complete session record is saved only when an action plan is selected.
+  - Impact: Reduces unnecessary data storage in the `sessions` table, eliminating empty and duplicate records while maintaining session data integrity.
+  - Testing: Verify that the `sessions` table receives one record per completed session, with complete conversation data, and no records for incomplete sessions. Confirm that logging, todo saving, and metadata functions remain unaffected.
+  
