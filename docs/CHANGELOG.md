@@ -234,3 +234,14 @@ This document tracks changes to the database schema for the NBRCD app.
 - Updated `getSupabaseClient` to explicitly set `storage` to `localStorage` for client-side session persistence and added `storageKey` for consistent token storage.
 ### Added
 - Added `TOKEN_REFRESHED` event handling in `LearningSession` to update the session when Supabase automatically refreshes tokens.
+
+## 2025-06-02
+### Fixed
+- **TodoListPage**: Corrected `handleAddTask` and `handleToggle` to properly set `due_date` and `completed_date` in the `todos` table:
+  - `handleAddTask`: Fixed `due_date` to use `Date.UTC` for the start of the current JST day (e.g., 2025-06-02 00:00 JST → `2025-06-01 15:00:00+00`). Previously, it incorrectly set `due_date` to `2025-06-01 06:00:00+00`.
+  - `handleToggle`: Refined `completed_date` calculation to ensure precise JST-to-UTC conversion (e.g., 2025-06-02 04:38 JST → `2025-06-01 19:38:00+00`).
+  - Ensured tasks added and completed at 2025-06-02 04:36 JST have correct UTC dates in the database and display as 2025-06-02 in the UI. (#ISSUE_NUMBER)
+### Notes
+- This fix resolves incorrect date handling for `due_date` and `completed_date`, ensuring alignment with JST (e.g., `due_date` should be `2025-06-01 15:00:00+00` for 2025-06-02 tasks).
+- Developers should verify that tasks added at 2025-06-02 04:36 JST have `date` ≈ `2025-06-01 19:36:00+00`, `due_date` = `2025-06-01 15:00:00+00`, and `completed_date` ≈ `2025-06-01 19:38:00+00` in the database, with UI display as 2025-06-02.
+- No database schema changes were required.
