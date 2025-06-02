@@ -13,7 +13,7 @@ interface Todo {
   date: string;
   dueDate?: string;
   completedDate?: string;
-  priority: number; // Added priority field
+  priority: number;
 }
 
 interface SupabaseTodo {
@@ -24,7 +24,7 @@ interface SupabaseTodo {
   due_date?: string;
   completed_date?: string;
   user_id: string;
-  priority: number; // Added priority field
+  priority: number;
 }
 
 export default function TodoListPage() {
@@ -55,7 +55,7 @@ export default function TodoListPage() {
           .eq('user_id', user.id)
           .eq('completed', false)
           .order('due_date', { ascending: true, nullsFirst: false })
-          .order('priority', { ascending: false }) // Added priority ordering
+          .order('priority', { ascending: false })
           .order('date', { ascending: true });
 
         if (error) {
@@ -69,7 +69,7 @@ export default function TodoListPage() {
           date: todo.date,
           dueDate: todo.due_date,
           completedDate: todo.completed_date,
-          priority: todo.priority, // Added priority mapping
+          priority: todo.priority,
         })) || [];
 
         setTodos(mappedData);
@@ -145,15 +145,21 @@ export default function TodoListPage() {
       return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // Get current time in JST
+    const nowJST = new Date();
+    // Convert to UTC for 'date' (exact timestamp)
+    const dateUTC = new Date(nowJST.getTime() - 9 * 60 * 60 * 1000);
+    // Set 'due_date' to start of current JST day (00:00 JST), then convert to UTC
+    const dueDateJST = new Date(Date.UTC(nowJST.getUTCFullYear(), nowJST.getUTCMonth(), nowJST.getUTCDate()));
+    const dueDateUTC = new Date(dueDateJST.getTime() - 9 * 60 * 60 * 1000);
 
     const newTodo: Todo = {
       id: uuidv4(),
       text: newTask,
       completed: false,
-      date: new Date().toISOString(),
-      dueDate: today,
-      priority: 0, // Default priority
+      date: dateUTC.toISOString(),
+      dueDate: dueDateUTC.toISOString(),
+      priority: 0,
     };
 
     try {
@@ -190,12 +196,16 @@ export default function TodoListPage() {
       return;
     }
 
+    // Get current time in JST and convert to UTC
+    const completedDateJST = new Date();
+    const completedDateUTC = new Date(completedDateJST.getTime() - 9 * 60 * 60 * 1000);
+
     try {
       const { error } = await supabase
         .from('todos')
         .update({
           completed: true,
-          completed_date: new Date().toISOString(),
+          completed_date: completedDateUTC.toISOString(),
         })
         .eq('id', id)
         .eq('user_id', user.id);
@@ -307,10 +317,12 @@ export default function TodoListPage() {
     const todo = todos.find((t) => t.id === id);
     if (todo?.dueDate) {
       const date = new Date(todo.dueDate);
+      date.setHours(date.getHours() + 9);
       const formattedDate = date.toISOString().split('T')[0];
       setDueDate(formattedDate);
     } else {
-      setDueDate("");
+      const todayJST = new Date();
+      setDueDate(todayJST.toISOString().split('T')[0]);
     }
   };
 
@@ -324,11 +336,14 @@ export default function TodoListPage() {
       return;
     }
 
+    const dueDateJST = new Date(dueDate);
+    dueDateJST.setHours(dueDateJST.getHours() - 9);
+
     try {
       const { error } = await supabase
         .from('todos')
         .update({
-          due_date: dueDate,
+          due_date: dueDateJST.toISOString(),
         })
         .eq('id', selectedTodoId)
         .eq('user_id', user.id);
@@ -338,7 +353,7 @@ export default function TodoListPage() {
       }
 
       const updatedTodos = todos.map((todo) =>
-        todo.id === selectedTodoId ? { ...todo, dueDate: dueDate } : todo
+        todo.id === selectedTodoId ? { ...todo, dueDate: dueDateJST.toISOString() } : todo
       );
       setTodos(updatedTodos);
       setSelectedTodoId(null);
@@ -349,27 +364,36 @@ export default function TodoListPage() {
   };
 
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
-    const dateKey = todo.dueDate ? new Date(todo.dueDate).toLocaleDateString() : new Date(todo.date).toLocaleDateString();
+    const dateObj = todo.dueDate ? new Date(todo.dueDate) : new Date(todo.date);
+    dateObj.setHours(dateObj.getHours() + 9);
+    const dateKey = dateObj.toLocaleDateString("ja-JP", {
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    });
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(todo);
     return acc;
   }, {});
 
   const sortedGroupedTodos = Object.keys(groupedTodos)
-    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    .sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      dateA.setHours(dateA.getHours() - 9);
+      dateB.setHours(dateB.getHours() - 9);
+      return dateA.getTime() - dateB.getTime();
+    })
     .reduce((acc: { [key: string]: Todo[] }, dateKey) => {
       acc[dateKey] = groupedTodos[dateKey].sort((a, b) => {
-        // Sort by priority (descending) first
         if (a.priority !== b.priority) {
           return b.priority - a.priority;
         }
-        // Then by due date if available
         if (a.dueDate && b.dueDate) {
           return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
         }
         if (a.dueDate) return -1;
         if (b.dueDate) return 1;
-        // Finally by creation date
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
       return acc;
@@ -444,7 +468,16 @@ export default function TodoListPage() {
                         onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
                         className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
                       >
-                        {todo.text} 
+                        {todo.text}{" "}
+                        {todo.dueDate && (
+                          <span className="text-xs text-gray-500">
+                            (期限: {(() => {
+                              const date = new Date(todo.dueDate);
+                              date.setHours(date.getHours() + 9);
+                              return date.toLocaleDateString("ja-JP");
+                            })()})
+                          </span>
+                        )}
                       </span>
                     </div>
                     <div className="flex items-center space-x-2 mr-2">

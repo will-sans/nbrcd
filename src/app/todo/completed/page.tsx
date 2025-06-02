@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { FaCheck, FaBook } from "react-icons/fa";
 import { getSupabaseClient } from '@/utils/supabase/client';
 
-
 interface Todo {
   id: string;
   text: string;
@@ -69,6 +68,7 @@ export default function CompletedTodoPage() {
           if (todo.completed_date) {
             try {
               const completedDate = new Date(todo.completed_date);
+              completedDate.setHours(completedDate.getHours() + 9); // Adjust UTC to JST
               if (!isNaN(completedDate.getTime())) {
                 completedDateStr = completedDate.toLocaleDateString("ja-JP", {
                   month: "long",
@@ -302,10 +302,14 @@ export default function CompletedTodoPage() {
                         <span className="line-through">{todo.text}</span>
                         <p className="text-xs text-gray-500">
                           {todo.completed_date
-                            ? new Date(todo.completed_date).toLocaleTimeString("ja-JP", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
+                            ? (() => {
+                                const date = new Date(todo.completed_date);
+                                date.setHours(date.getHours() + 9); // Adjust UTC to JST
+                                return date.toLocaleTimeString("ja-JP", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                });
+                              })()
                             : ""}
                         </p>
                       </div>
