@@ -318,7 +318,6 @@ This document tracks changes to the database schema for the NBRCD app.
 - Developers should verify that tasks added at 2025-06-04 22:39 JST have `due_date` = `2025-06-04 15:00:00+00` and display as “2025-06-04” in `Asia/Tokyo`.
 - Test with other timezones (e.g., `America/New_York`) to ensure correct date conversions.
 - No database schema changes were required.
-## [Unreleased]
 
 ### Fixed
 - **DiaryListPage**: Added TypeScript types for Supabase query responses and fixed `WorkLog` interface (`id` changed from `number` to `string` for UUID). Added dynamic timezone support with `date-fns-tz` and `TimezoneContext`. Introduced `isLoading` state for better UX. (#ISSUE_NUMBER)
@@ -339,3 +338,33 @@ This document tracks changes to the database schema for the NBRCD app.
 - Test with other timezones (e.g., `America/New_York`) and DST transitions.
 - No database schema changes were required, but verify `work_logs.id` is `UUID`, not `integer`.
 - Run `npm run build` to ensure no TypeScript errors.
+
+### Fixed
+- **DiaryListPage**: Removed unused `formatDate` function to fix ESLint `@typescript-eslint/no-unused-vars` error, allowing successful `next build`. Also removed unused `formatInTimeZone`, `toZonedTime`, and `ja` imports since no timezone formatting is needed. (#ISSUE_NUMBER)
+- **TimeTrackerPage**: Removed unused `formatInTimeZone` and `ja` imports to fix ESLint `@typescript-eslint/no-unused-vars` errors, ensuring successful `next build`. (#ISSUE_NUMBER)
+
+### Notes
+- These changes resolve ESLint errors that prevented `npm run build` from completing.
+- No functional changes were made; all Supabase queries and timezone logic remain intact.
+- Developers should run `npm run build` to confirm no remaining ESLint errors.
+- Test app functionality at 2025-06-05 00:12 JST to verify:
+  - Diary logs display correctly for selected date.
+  - Time tracking works without errors, with tasks filtered by due date in user’s timezone.
+- No database schema changes were required.
+
+### Fixed
+- **SettingsPage**: Restored original functionality (user info, goal management, logout, delete user, FAQ, privacy policy, terms of service) after accidental overwrite with timezone-only settings. Integrated timezone settings into the "User Information" tab, using `TimezoneContext` and `profiles` table. Fixed bug in `handleUpdateEmailPassword` where password input `onChange` incorrectly updated `newEmail` instead of `newPassword`. (#ISSUE_NUMBER)
+
+### Added
+- **Timezone Settings in SettingsPage**: Added timezone selection dropdown and modal, allowing users to update their timezone in the `profiles` table. Timezone is fetched on load and synced with `TimezoneContext`. (#ISSUE_NUMBER)
+- **Profile Cleanup**: Added deletion of `profiles` table entry in `handleDeleteUser` to ensure complete user data removal. (#ISSUE_NUMBER)
+
+### Notes
+- This change restores critical `SettingsPage` features while adding timezone support, ensuring compatibility with the app’s dynamic timezone handling.
+- Developers should test all settings features at 2025-06-05 12:27 JST:
+  - Verify username, email, password, and goal updates work correctly.
+  - Confirm timezone selection updates `profiles.timezone` and affects date displays in other pages (e.g., `TodoListPage`, `SchedulePage`).
+  - Ensure logout and delete user functions operate without errors.
+  - Check FAQ and policy links navigate correctly.
+- Run `npm run build` to confirm no ESLint/TypeScript errors.
+- No database schema changes were required, but ensure `profiles` table exists with `timezone` column.
