@@ -7,4 +7,5 @@ export const philosophers = [
   { id: 'dyson', name: 'ジェームス・ダイソン' },
   { id: 'ezoe', name: '江副浩正' },
   { id: 'yanai', name: '柳井正' },
+  { id: 'garber', name: 'マイケル E.ガーバー' },
 ];
