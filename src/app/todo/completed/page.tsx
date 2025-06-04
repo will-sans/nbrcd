@@ -1,9 +1,14 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FaCheck, FaBook } from "react-icons/fa";
-import { getSupabaseClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from "@/utils/supabase/client";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import { ja } from "date-fns/locale";
+import { useTimezone } from "@/lib/timezone-context";
+import { PostgrestError } from "@supabase/supabase-js";
 
 interface Todo {
   id: string;
@@ -19,42 +24,46 @@ interface GroupedTodos {
 
 export default function CompletedTodoPage() {
   const router = useRouter();
+  const supabase = getSupabaseClient();
+  const { timezone } = useTimezone();
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([]);
   const [groupedTodos, setGroupedTodos] = useState<GroupedTodos>({});
   const [loggedTodoIds, setLoggedTodoIds] = useState<Set<string>>(new Set());
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [exitingTodos, setExitingTodos] = useState<Map<string, "restore" | "delete">>(new Map());
-  const supabase = getSupabaseClient();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchCompletedTodos = async () => {
+      setIsLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("Failed to get user:", userError?.message);
         router.push("/login");
+        setIsLoading(false);
         return;
       }
 
       try {
-        const { data: todos, error: todosError } = await supabase
-          .from('todos')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('completed', true)
-          .order('completed_date', { ascending: false });
+        const { data: todos, error: todosError }: { data: Todo[] | null; error: PostgrestError | null } = await supabase
+          .from("todos")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("completed", true)
+          .order("completed_date", { ascending: false });
 
         if (todosError) {
-          throw new Error(todosError.message || '完了済みタスクの取得に失敗しました');
+          throw new Error(todosError.message || "完了済みタスクの取得に失敗しました");
         }
 
         setCompletedTodos(todos || []);
 
-        const { data: workLogs, error: logsError } = await supabase
-          .from('work_logs')
-          .select('todo_id')
-          .eq('user_id', user.id)
-          .not('todo_id', 'is', null);
+        const { data: workLogs, error: logsError }: { data: { todo_id: string }[] | null; error: PostgrestError | null } = await supabase
+          .from("work_logs")
+          .select("todo_id")
+          .eq("user_id", user.id)
+          .not("todo_id", "is", null);
 
         if (logsError) {
           console.error("Failed to fetch work logs:", logsError);
@@ -67,14 +76,9 @@ export default function CompletedTodoPage() {
           let completedDateStr = "不明な日付";
           if (todo.completed_date) {
             try {
-              const completedDate = new Date(todo.completed_date);
-              completedDate.setHours(completedDate.getHours() + 9); // Adjust UTC to JST
-              if (!isNaN(completedDate.getTime())) {
-                completedDateStr = completedDate.toLocaleDateString("ja-JP", {
-                  month: "long",
-                  day: "numeric",
-                  weekday: "short",
-                });
+              const date = toZonedTime(new Date(todo.completed_date), timezone);
+              if (!isNaN(date.getTime())) {
+                completedDateStr = formatInTimeZone(date, timezone, "MMMM d, yyyy (EEE)", { locale: ja });
               }
             } catch {
               console.warn(`Invalid date format for todo ${todo.id}: ${todo.completed_date}`);
@@ -90,6 +94,8 @@ export default function CompletedTodoPage() {
       } catch (err) {
         console.error("Failed to fetch completed todos:", err);
         router.push("/login");
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -97,15 +103,13 @@ export default function CompletedTodoPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state changed:", event, session);
-      if (event === 'SIGNED_OUT' || !session) {
+      if (event === "SIGNED_OUT" || !session) {
         router.push("/login");
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router, supabase]);
+    return () => subscription.unsubscribe();
+  }, [router, supabase, timezone]);
 
   const handleRestoreTodo = async (id: string) => {
     if (loggedTodoIds.has(id)) {
@@ -121,23 +125,23 @@ export default function CompletedTodoPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .update({
           completed: false,
           completed_date: null,
         })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq("id", id)
+        .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || 'タスクの復元に失敗しました');
+        throw new Error(error.message || "タスクの復元に失敗しました");
       }
     } catch (err) {
       console.error("Failed to restore task:", err);
@@ -158,20 +162,20 @@ export default function CompletedTodoPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq("id", id)
+        .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || 'タスクの削除に失敗しました');
+        throw new Error(error.message || "タスクの削除に失敗しました");
       }
     } catch (err) {
       console.error("Failed to delete task:", err);
@@ -179,7 +183,7 @@ export default function CompletedTodoPage() {
   };
 
   const handleRowClick = (todo: Todo) => {
-    router.push(`/diary?todo_id=${todo.id}&task_content=${encodeURIComponent(todo.text)}&completed_date=${encodeURIComponent(todo.completed_date || '')}`);
+    router.push(`/diary?todo_id=${todo.id}&task_content=${encodeURIComponent(todo.text)}&completed_date=${encodeURIComponent(todo.completed_date || "")}`);
   };
 
   const onTransitionEnd = (id: string) => {
@@ -252,92 +256,89 @@ export default function CompletedTodoPage() {
         </button>
       </div>
 
-      <div className="mb-4">
-        <p>完了: {completedTodos.length} タスク</p>
-      </div>
-
-      {Object.keys(groupedTodos).length > 0 ? (
-        Object.entries(groupedTodos).map(([date, todos]) => (
-          <div key={date} className="mb-4">
-            <h2 className="text-lg font-semibold mb-2">{date}</h2>
-            <ul className="space-y-2">
-              {todos.map((todo) => (
-                <li
-                  key={todo.id}
-                  className={`relative transition-all duration-300 ease-in-out ${loggedTodoIds.has(todo.id) ? 'cursor-default' : 'cursor-pointer'}`}
-                  style={{
-                    opacity: exitingTodos.has(todo.id) ? 0 : 1,
-                    transform: exitingTodos.has(todo.id)
-                      ? `translateX(${
-                          exitingTodos.get(todo.id) === "delete" ? "-100%" : "100%"
-                        })`
-                      : "translateX(0)",
-                  }}
-                  onTransitionEnd={() => {
-                    if (exitingTodos.has(todo.id)) {
-                      onTransitionEnd(todo.id);
-                    }
-                  }}
-                  onClick={() => !loggedTodoIds.has(todo.id) && handleRowClick(todo)}
-                >
-                  <div className={`flex items-center ${loggedTodoIds.has(todo.id) ? 'bg-gray-300' : 'bg-gray-100'} p-2 rounded overflow-hidden`}>
-                    <div
-                      className="flex items-center w-full"
-                      style={{
-                        transform: `translateX(${swipeStates[todo.id] || 0}px)`,
-                        transition: "transform 0.3s ease",
-                      }}
-                      onTouchStart={(e) => handleTouchStart(e, todo.id)}
-                      onTouchMove={(e) => handleTouchMove(todo.id, e)}
-                      onTouchEnd={() => handleTouchEnd(todo.id)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={true}
-                        onChange={() => handleRestoreTodo(todo.id)}
-                        className="mr-2"
-                        disabled={loggedTodoIds.has(todo.id)}
-                      />
-                      <div className="flex-1">
-                        <span className="line-through">{todo.text}</span>
-                        <p className="text-xs text-gray-500">
-                          {todo.completed_date
-                            ? (() => {
-                                const date = new Date(todo.completed_date);
-                                date.setHours(date.getHours() + 9); // Adjust UTC to JST
-                                return date.toLocaleTimeString("ja-JP", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                });
-                              })()
-                            : ""}
-                        </p>
-                      </div>
-                    </div>
-                    {!loggedTodoIds.has(todo.id) && (
-                      <div className="absolute right-0 h-full flex items-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTodo(todo.id);
-                          }}
-                          className="bg-red-500 text-white h-full px-4 py-2"
-                          style={{
-                            display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none",
-                          }}
-                        >
-                          削除
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))
+      {isLoading ? (
+        <p className="text-gray-500 text-center">読み込み中...</p>
       ) : (
-        <p className="text-gray-500 text-center">完了: 0 タスク</p>
+        <>
+          <div className="mb-4">
+            <p>完了: {completedTodos.length} タスク</p>
+          </div>
+
+          {Object.keys(groupedTodos).length > 0 ? (
+            Object.entries(groupedTodos).map(([date, todos]) => (
+              <div key={date} className="mb-4">
+                <h2 className="text-lg font-semibold mb-2">{date}</h2>
+                <ul className="space-y-2">
+                  {todos.map((todo) => (
+                    <li
+                      key={todo.id}
+                      className={`relative transition-all duration-300 ease-in-out ${loggedTodoIds.has(todo.id) ? "cursor-default" : "cursor-pointer"}`}
+                      style={{
+                        opacity: exitingTodos.has(todo.id) ? 0 : 1,
+                        transform: exitingTodos.has(todo.id)
+                          ? `translateX(${exitingTodos.get(todo.id) === "delete" ? "-100%" : "100%"})`
+                          : "translateX(0)",
+                      }}
+                      onTransitionEnd={() => {
+                        if (exitingTodos.has(todo.id)) {
+                          onTransitionEnd(todo.id);
+                        }
+                      }}
+                      onClick={() => !loggedTodoIds.has(todo.id) && handleRowClick(todo)}
+                    >
+                      <div className={`flex items-center ${loggedTodoIds.has(todo.id) ? "bg-gray-300" : "bg-gray-100"} p-2 rounded overflow-hidden`}>
+                        <div
+                          className="flex items-center w-full"
+                          style={{
+                            transform: `translateX(${swipeStates[todo.id] || 0}px)`,
+                            transition: "transform 0.3s ease",
+                          }}
+                          onTouchStart={(e) => handleTouchStart(e, todo.id)}
+                          onTouchMove={(e) => handleTouchMove(todo.id, e)}
+                          onTouchEnd={() => handleTouchEnd(todo.id)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={true}
+                            onChange={() => handleRestoreTodo(todo.id)}
+                            className="mr-2"
+                            disabled={loggedTodoIds.has(todo.id)}
+                          />
+                          <div className="flex-1">
+                            <span className="line-through">{todo.text}</span>
+                            <p className="text-xs text-gray-500">
+                              {todo.completed_date
+                                ? formatInTimeZone(toZonedTime(new Date(todo.completed_date), timezone), timezone, "HH:mm", { locale: ja })
+                                : ""}
+                            </p>
+                          </div>
+                        </div>
+                        {!loggedTodoIds.has(todo.id) && (
+                          <div className="absolute right-0 h-full flex items-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteTodo(todo.id);
+                              }}
+                              className="bg-red-500 text-white h-full px-4 py-2"
+                              style={{
+                                display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none",
+                              }}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500 text-center">完了: 0 タスク</p>
+          )}
+        </>
       )}
     </div>
   );

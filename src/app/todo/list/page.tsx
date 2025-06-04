@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -5,6 +6,10 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from '@/utils/supabase/client';
 import { v4 as uuidv4 } from "uuid";
 import { FaArrowLeft, FaArrowUp, FaArrowDown } from "react-icons/fa";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import { ja } from "date-fns/locale";
+import { useTimezone } from "@/lib/timezone-context";
+import { PostgrestError } from "@supabase/supabase-js";
 
 interface Todo {
   id: string;
@@ -38,6 +43,7 @@ export default function TodoListPage() {
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
   const supabase = getSupabaseClient();
+  const { timezone } = useTimezone();
 
   useEffect(() => {
     const fetchTodos = async () => {
@@ -49,20 +55,20 @@ export default function TodoListPage() {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('todos')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('completed', false)
-          .order('due_date', { ascending: true, nullsFirst: false })
-          .order('priority', { ascending: false })
-          .order('date', { ascending: true });
+        const { data, error }: { data: SupabaseTodo[] | null; error: PostgrestError | null } = await supabase
+          .from("todos")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("completed", false)
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .order("priority", { ascending: false })
+          .order("date", { ascending: true });
 
         if (error) {
-          throw new Error(error.message || 'タスクの取得に失敗しました');
+          throw new Error(error.message || "タスクの取得に失敗しました");
         }
 
-        const mappedData = data?.map((todo: SupabaseTodo) => ({
+        const mappedData = data?.map((todo) => ({
           id: todo.id,
           text: todo.text,
           completed: todo.completed,
@@ -74,7 +80,7 @@ export default function TodoListPage() {
 
         setTodos(mappedData);
       } catch (err) {
-        console.error("Failed to fetch todos:", err);
+        console.error("Error:", err);
         router.push("/login");
       }
     };
@@ -83,14 +89,12 @@ export default function TodoListPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state changed:", event, session);
-      if (event === 'SIGNED_OUT' || !session) {
+      if (event === "SIGNED_OUT" || !session) {
         router.push("/login");
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, [router, supabase]);
 
   useEffect(() => {
@@ -113,13 +117,13 @@ export default function TodoListPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       return;
     }
 
     try {
       const { error } = await supabase
-        .from('point_logs')
+        .from("point_logs")
         .insert({
           user_id: user.id,
           action,
@@ -128,7 +132,7 @@ export default function TodoListPage() {
         });
 
       if (error) {
-        throw new Error(error.message || 'ポイントの保存に失敗しました');
+        throw new Error(error.message || "ポイントの保存に失敗しました");
       }
     } catch (err) {
       console.error("Failed to save points:", err);
@@ -140,31 +144,37 @@ export default function TodoListPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
-    // Get current time in JST
-    const nowJST = new Date();
-    // Convert to UTC for 'date' (exact timestamp)
-    const dateUTC = new Date(nowJST.getTime() - 9 * 60 * 60 * 1000);
-    // Set 'due_date' to start of current JST day (00:00 JST), then convert to UTC
-    const dueDateJST = new Date(Date.UTC(nowJST.getUTCFullYear(), nowJST.getUTCMonth(), nowJST.getUTCDate()));
-    const dueDateUTC = new Date(dueDateJST.getTime() - 9 * 60 * 60 * 1000);
+    // Get current time in UTC
+    const nowUTC = new Date();
+    // Set 'due_date' to start of current day in user's timezone
+    const nowInTimezone = toZonedTime(nowUTC, timezone);
+    const dueDateInTimezone = new Date(nowInTimezone.getFullYear(), nowInTimezone.getMonth(), nowInTimezone.getDate());
+    // Convert to UTC for storage
+    const dueDateUTC = new Date(
+      Date.UTC(
+        dueDateInTimezone.getFullYear(),
+        dueDateInTimezone.getMonth(),
+        dueDateInTimezone.getDate()
+      )
+    );
 
     const newTodo: Todo = {
       id: uuidv4(),
       text: newTask,
       completed: false,
-      date: dateUTC.toISOString(),
+      date: nowUTC.toISOString(),
       dueDate: dueDateUTC.toISOString(),
       priority: 0,
     };
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .insert({
           id: newTodo.id,
           user_id: user.id,
@@ -176,7 +186,7 @@ export default function TodoListPage() {
         });
 
       if (error) {
-        throw new Error(error.message || 'タスクの追加に失敗しました');
+        throw new Error(error.message || "タスクの追加に失敗しました");
       }
 
       setTodos([...todos, newTodo]);
@@ -191,27 +201,26 @@ export default function TodoListPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
-    // Get current time in JST and convert to UTC
-    const completedDateJST = new Date();
-    const completedDateUTC = new Date(completedDateJST.getTime() - 9 * 60 * 60 * 1000);
+    // Get current time in UTC
+    const completedDateUTC = new Date();
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .update({
           completed: true,
           completed_date: completedDateUTC.toISOString(),
         })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq("id", id)
+        .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || 'タスクの更新に失敗しました');
+        throw new Error(error.message || "タスクの更新に失敗しました");
       }
 
       setTimeout(() => {
@@ -230,20 +239,20 @@ export default function TodoListPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq("id", id)
+        .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || 'タスクの削除に失敗しました');
+        throw new Error(error.message || "タスクの削除に失敗しました");
       }
 
       setTimeout(() => {
@@ -255,33 +264,33 @@ export default function TodoListPage() {
     }
   };
 
-  const handlePriorityChange = async (id: string, direction: 'up' | 'down') => {
+  const handlePriorityChange = async (id: string, direction: "up" | "down") => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
-    const todo = todos.find(t => t.id === id);
+    const todo = todos.find((t) => t.id === id);
     if (!todo) return;
 
-    const newPriority = direction === 'up' ? todo.priority + 1 : Math.max(0, todo.priority - 1);
+    const newPriority = direction === "up" ? todo.priority + 1 : Math.max(0, todo.priority - 1);
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .update({
           priority: newPriority,
         })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq("id", id)
+        .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || '優先度の更新に失敗しました');
+        throw new Error(error.message || "優先度の更新に失敗しました");
       }
 
-      setTodos(todos.map(t => t.id === id ? { ...t, priority: newPriority } : t));
+      setTodos(todos.map((t) => (t.id === id ? { ...t, priority: newPriority } : t)));
     } catch (err) {
       console.error("Failed to update priority:", err);
     }
@@ -316,13 +325,12 @@ export default function TodoListPage() {
     setSelectedTodoId(id);
     const todo = todos.find((t) => t.id === id);
     if (todo?.dueDate) {
-      const date = new Date(todo.dueDate);
-      date.setHours(date.getHours() + 9);
-      const formattedDate = date.toISOString().split('T')[0];
+      const date = toZonedTime(new Date(todo.dueDate), timezone);
+      const formattedDate = formatInTimeZone(date, timezone, "yyyy-MM-dd");
       setDueDate(formattedDate);
     } else {
-      const todayJST = new Date();
-      setDueDate(todayJST.toISOString().split('T')[0]);
+      const today = toZonedTime(new Date(), timezone);
+      setDueDate(formatInTimeZone(today, timezone, "yyyy-MM-dd"));
     }
   };
 
@@ -331,29 +339,36 @@ export default function TodoListPage() {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.warn('No user found in Supabase Auth');
+      console.warn("No user found in Supabase Auth");
       router.push("/login");
       return;
     }
 
-    const dueDateJST = new Date(dueDate);
-    dueDateJST.setHours(dueDateJST.getHours() - 9);
+    // Parse dueDate as start of day in user's timezone, then convert to UTC
+    const dueDateInTimezone = new Date(dueDate);
+    const dueDateUTC = new Date(
+      Date.UTC(
+        dueDateInTimezone.getFullYear(),
+        dueDateInTimezone.getMonth(),
+        dueDateInTimezone.getDate()
+      )
+    );
 
     try {
       const { error } = await supabase
-        .from('todos')
+        .from("todos")
         .update({
-          due_date: dueDateJST.toISOString(),
+          due_date: dueDateUTC.toISOString(),
         })
-        .eq('id', selectedTodoId)
-        .eq('user_id', user.id);
+        .eq("id", selectedTodoId)
+        .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || '期限の保存に失敗しました');
+        throw new Error(error.message || "期限の保存に失敗しました");
       }
 
       const updatedTodos = todos.map((todo) =>
-        todo.id === selectedTodoId ? { ...todo, dueDate: dueDateJST.toISOString() } : todo
+        todo.id === selectedTodoId ? { ...todo, dueDate: dueDateUTC.toISOString() } : todo
       );
       setTodos(updatedTodos);
       setSelectedTodoId(null);
@@ -365,12 +380,8 @@ export default function TodoListPage() {
 
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
     const dateObj = todo.dueDate ? new Date(todo.dueDate) : new Date(todo.date);
-    dateObj.setHours(dateObj.getHours() + 9);
-    const dateKey = dateObj.toLocaleDateString("ja-JP", {
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-    });
+    const zonedDate = toZonedTime(dateObj, timezone);
+    const dateKey = formatInTimeZone(zonedDate, timezone, "MMMM d, yyyy (EEE)", { locale: ja });
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(todo);
     return acc;
@@ -380,8 +391,6 @@ export default function TodoListPage() {
     .sort((a, b) => {
       const dateA = new Date(a);
       const dateB = new Date(b);
-      dateA.setHours(dateA.getHours() - 9);
-      dateB.setHours(dateB.getHours() - 9);
       return dateA.getTime() - dateB.getTime();
     })
     .reduce((acc: { [key: string]: Todo[] }, dateKey) => {
@@ -471,18 +480,14 @@ export default function TodoListPage() {
                         {todo.text}{" "}
                         {todo.dueDate && (
                           <span className="text-xs text-gray-500">
-                            (期限: {(() => {
-                              const date = new Date(todo.dueDate);
-                              date.setHours(date.getHours() + 9);
-                              return date.toLocaleDateString("ja-JP");
-                            })()})
+                            (期限: {formatInTimeZone(new Date(todo.dueDate), timezone, "yyyy-MM-dd")})
                           </span>
                         )}
                       </span>
                     </div>
                     <div className="flex items-center space-x-2 mr-2">
                       <button
-                        onClick={() => handlePriorityChange(todo.id, 'up')}
+                        onClick={() => handlePriorityChange(todo.id, "up")}
                         className="text-red-500 hover:text-red-700"
                         aria-label="優先度を上げる"
                       >
@@ -490,7 +495,7 @@ export default function TodoListPage() {
                       </button>
                       {todo.priority}
                       <button
-                        onClick={() => handlePriorityChange(todo.id, 'down')}
+                        onClick={() => handlePriorityChange(todo.id, "down")}
                         className="text-green-500 hover:text-green-700"
                         aria-label="優先度を下げる"
                       >

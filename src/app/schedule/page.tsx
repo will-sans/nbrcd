@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,6 +7,10 @@ import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaArrowLeft } from "react-icons/fa";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import { ja } from "date-fns/locale";
+import { useTimezone } from "@/lib/timezone-context";
+import { PostgrestError } from "@supabase/supabase-js";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -23,17 +28,19 @@ interface TimeSession {
 export default function SchedulePage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
+  const { timezone } = useTimezone();
   const [sessions, setSessions] = useState<TimeSession[]>([]);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchSessions = async () => {
+      setIsLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         router.push("/login");
+        setIsLoading(false);
         return;
       }
 
@@ -47,7 +54,6 @@ export default function SchedulePage() {
             0, 0, 0
           )
         );
-        startOfDay.setHours(startOfDay.getHours() - 9); // Adjust UTC to JST
         const endOfDay = new Date(
           Date.UTC(
             selectedDateObj.getFullYear(),
@@ -56,9 +62,8 @@ export default function SchedulePage() {
             0, 0, 0
           )
         );
-        endOfDay.setHours(endOfDay.getHours() - 9); // Adjust UTC to JST
 
-        const { data, error } = await supabase
+        const { data, error }: { data: TimeSession[] | null; error: PostgrestError | null } = await supabase
           .from("time_sessions")
           .select("*")
           .eq("user_id", user.id)
@@ -71,11 +76,13 @@ export default function SchedulePage() {
       } catch (err) {
         console.error("Failed to fetch sessions:", err);
         setError("スケジュールの取得に失敗しました");
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchSessions();
-  }, [supabase, router, selectedDate]);
+  }, [supabase, router, selectedDate, timezone]);
 
   const getPieChartData = () => {
     const categoryDurations = sessions.reduce((acc, session) => {
@@ -106,10 +113,7 @@ export default function SchedulePage() {
   };
 
   const formatTime = (isoString: string) => {
-    return new Date(isoString).toLocaleTimeString("ja-JP", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatInTimeZone(toZonedTime(new Date(isoString), timezone), timezone, "HH:mm", { locale: ja });
   };
 
   const formatDuration = (seconds: number) => {
@@ -145,53 +149,57 @@ export default function SchedulePage() {
 
       {error && <div className="text-red-500 mb-4">{error}</div>}
 
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-2">タイムライン</h2>
-        {sessions.length > 0 ? (
-          <ul className="space-y-2">
-            {sessions.map((session) => (
-              <li key={session.id} className="p-2 bg-gray-100 rounded">
-                <p>
-                  <strong>{session.task}</strong> ({session.category})
-                </p>
-                <p>
-                  {formatTime(session.start_time)} -{" "}
-                  {session.end_time ? formatTime(session.end_time) : "進行中"}
-                </p>
-                {session.duration && (
-                  <p>所要時間: {formatDuration(session.duration)}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-gray-500">この日の記録はありません</p>
-        )}
-      </div>
+      {isLoading ? (
+        <p className="text-gray-500 text-center">読み込み中...</p>
+      ) : (
+        <>
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-2">タイムライン</h2>
+            {sessions.length > 0 ? (
+              <ul className="space-y-2">
+                {sessions.map((session) => (
+                  <li key={session.id} className="p-2 bg-gray-100 rounded">
+                    <p>
+                      <strong>{session.task}</strong> ({session.category})
+                    </p>
+                    <p>
+                      {formatTime(session.start_time)} -{" "}
+                      {session.end_time ? formatTime(session.end_time) : "進行中"}
+                    </p>
+                    {session.duration && (
+                      <p>所要時間: {formatDuration(session.duration)}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">この日の記録はありません</p>
+            )}
+          </div>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-2">カテゴリ別時間</h2>
-        {sessions.some((s) => s.duration) ? (
-          <Pie
-            data={getPieChartData()}
-            options={{
-              plugins: {
-                legend: { position: "bottom" },
-                tooltip: {
-                  callbacks: {
-                    label: (context) =>
-                      `${context.label}: ${formatDuration(
-                        context.raw as number
-                      )}`,
+          <div>
+            <h2 className="text-lg font-semibold mb-2">カテゴリ別時間</h2>
+            {sessions.some((s) => s.duration) ? (
+              <Pie
+                data={getPieChartData()}
+                options={{
+                  plugins: {
+                    legend: { position: "bottom" },
+                    tooltip: {
+                      callbacks: {
+                        label: (context) =>
+                          `${context.label}: ${formatDuration(context.raw as number)}`,
+                      },
+                    },
                   },
-                },
-              },
-            }}
-          />
-        ) : (
-          <p className="text-gray-500">データがありません</p>
-        )}
-      </div>
+                }}
+              />
+            ) : (
+              <p className="text-gray-500">データがありません</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

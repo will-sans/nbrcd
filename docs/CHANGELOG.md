@@ -291,5 +291,51 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Security
 - Secured the `match_questions` function by explicitly setting `search_path` to prevent schema manipulation vulnerabilities.
 
-**Date**: 2025-06-04  
-**Editor**: WILL / Grok
+### Fixed
+- **app/layout.tsx**: Ensured `TimezoneProvider` wraps all pages in the root layout to provide timezone context, fixing prerendering error for `/settings` page (`useTimezone must be used within a TimezoneProvider`). (#ISSUE_NUMBER)
+- **settings/page.tsx**: Added `export const dynamic = "force-dynamic"` to disable static prerendering, as the page requires authentication and dynamic timezone context. (#ISSUE_NUMBER)
+
+### Notes
+- This fix resolves the Next.js prerendering error during `npm run build` for the `/settings` page.
+- Developers should verify that:
+  - `npm run build` completes successfully.
+  - The `/settings` page loads correctly, allows timezone selection, and saves to the `profiles` table.
+  - Tasks added at, e.g., 2025-06-04 22:29 JST have `due_date` = `2025-06-04 15:00:00+00` in Supabase and display as “2025-06-05” in the UI.
+- No database schema changes were required.
+- If other pages encounter similar prerendering issues, check for missing context providers or consider dynamic rendering.
+
+### Fixed
+- **TodoListPage**: Updated `date-fns-tz` imports to fix TypeScript errors:
+  - Replaced `utcToZonedTime` with `toZonedTime` per `date-fns-tz@3.x.x` API.
+  - Removed `zonedTimeToUtc`, using `Date.UTC` for UTC conversions.
+  - Ensured `due_date` and `date` are converted from UTC to user’s timezone (default: `Asia/Tokyo`) for display, and user input is converted to UTC for storage.
+  - Fixed grouping and sorting to use `toZonedTime` and Japanese locale (`ja`). (#ISSUE_NUMBER)
+- **RootLayout**: Removed duplicate `{children}` render outside `TimezoneProvider` to prevent rendering app content twice. (#ISSUE_NUMBER)
+
+### Notes
+- These fixes resolve TypeScript errors and ensure correct timezone handling in `TodoListPage`.
+- `RootLayout` now renders content once, improving performance and preventing duplicate UI elements.
+- Developers should verify that tasks added at 2025-06-04 22:39 JST have `due_date` = `2025-06-04 15:00:00+00` and display as “2025-06-04” in `Asia/Tokyo`.
+- Test with other timezones (e.g., `America/New_York`) to ensure correct date conversions.
+- No database schema changes were required.
+## [Unreleased]
+
+### Fixed
+- **DiaryListPage**: Added TypeScript types for Supabase query responses and fixed `WorkLog` interface (`id` changed from `number` to `string` for UUID). Added dynamic timezone support with `date-fns-tz` and `TimezoneContext`. Introduced `isLoading` state for better UX. (#ISSUE_NUMBER)
+- **CompletedTodoPage**: Added TypeScript types for Supabase queries (`todos`, `work_logs`). Replaced hard-coded JST `+9` offset with `date-fns-tz` for dynamic timezone display. Added `isLoading` state. (#ISSUE_NUMBER)
+- **SchedulePage**: Added TypeScript types for `time_sessions` query. Replaced JST `–9` offset with `date-fns-tz` for dynamic timezone handling. Added `isLoading` state. (#ISSUE_NUMBER)
+- **TimeTrackerPage**: Added TypeScript types for `todos` and `time_sessions` queries. Replaced JST `–9` offset in `fetchTodos` with `date-fns-tz` for dynamic timezone filtering. Added `isLoading` state. (#ISSUE_NUMBER)
+
+### Added
+- **Timezone Support**: Extended all pages to use `TimezoneContext` and `date-fns-tz` for dynamic timezone handling, ensuring dates are stored in UTC and displayed in the user’s timezone (default: `Asia/Tokyo`). (#ISSUE_NUMBER)
+- **Loading States**: Added `isLoading` states to all pages for consistent UX, showing “読み込み中...” during Supabase fetches. (#ISSUE_NUMBER)
+
+### Notes
+- These changes align all pages with the TypeScript and timezone fixes applied to `TodoListPage`, ensuring consistency across the app.
+- Developers should test task and log operations at 2025-06-05 00:03 JST to verify:
+  - Database: Dates stored as UTC (e.g., `due_date` = `2025-06-04 15:00:00+00` for 2025-06-05 00:00 JST).
+  - UI: Dates displayed in user’s timezone (e.g., “2025-06-05” in `Asia/Tokyo`).
+  - Supabase queries execute without TypeScript errors.
+- Test with other timezones (e.g., `America/New_York`) and DST transitions.
+- No database schema changes were required, but verify `work_logs.id` is `UUID`, not `integer`.
+- Run `npm run build` to ensure no TypeScript errors.

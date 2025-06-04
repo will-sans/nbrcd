@@ -1,9 +1,13 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaArrowLeft, FaPlay, FaStop, FaChartPie, FaTrash } from "react-icons/fa";
+import { toZonedTime } from "date-fns-tz";
+import { useTimezone } from "@/lib/timezone-context";
+import { PostgrestError } from "@supabase/supabase-js";
 
 interface Todo {
   id: string;
@@ -12,7 +16,7 @@ interface Todo {
   date: string;
   due_date?: string;
   user_id: string;
-  priority: number; // Added priority field
+  priority: number;
 }
 
 interface TimeSession {
@@ -22,13 +26,14 @@ interface TimeSession {
   category: string;
   start_time: string;
   end_time?: string;
-  duration?: number; // in seconds
+  duration?: number;
   todo_id?: string;
 }
 
 export default function TimeTrackerPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
+  const { timezone } = useTimezone();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [customCategory, setCustomCategory] = useState("");
   const [isTracking, setIsTracking] = useState(false);
@@ -36,6 +41,7 @@ export default function TimeTrackerPage() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentSession, setCurrentSession] = useState<TimeSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const categories = ["仕事", "会議", "日常", "学習", "家事", "移動", "健康", "休憩"];
 
@@ -94,7 +100,7 @@ export default function TimeTrackerPage() {
           .from("time_sessions")
           .update({
             end_time: endTime.toISOString(),
-            duration: duration > 0 ? duration : 0, // Prevent negative duration
+            duration: duration > 0 ? duration : 0,
           })
           .eq("id", currentSession.id)
           .eq("user_id", user.id);
@@ -161,26 +167,29 @@ export default function TimeTrackerPage() {
   }, [currentSession, supabase, router]);
 
   const fetchTodos = useCallback(async () => {
+    setIsLoading(true);
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       router.push("/login");
+      setIsLoading(false);
       return;
     }
 
     try {
-      const todayJST = new Date();
-      todayJST.setHours(23, 59, 59, 999);
-      const endOfTodayUTC = new Date(todayJST.getTime() - 9 * 60 * 60 * 1000).toISOString();
-      console.log("Fetching todos up to:", endOfTodayUTC);
+      const today = toZonedTime(new Date(), timezone);
+      const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+      const endOfTodayUTC = new Date(
+        Date.UTC(endOfToday.getFullYear(), endOfToday.getMonth(), endOfToday.getDate(), 23, 59, 59, 999)
+      );
 
-      const { data, error } = await supabase
+      const { data, error }: { data: Todo[] | null; error: PostgrestError | null } = await supabase
         .from("todos")
         .select("*")
         .eq("user_id", user.id)
         .eq("completed", false)
-        .or(`due_date.lte.${endOfTodayUTC},and(due_date.is.null,date.lte.${endOfTodayUTC})`)
+        .or(`due_date.lte.${endOfTodayUTC.toISOString()},and(due_date.is.null,date.lte.${endOfTodayUTC.toISOString()})`)
         .order("due_date", { ascending: true, nullsFirst: false })
-        .order("priority", { ascending: false }) // Added priority ordering
+        .order("priority", { ascending: false })
         .order("date", { ascending: true });
 
       if (error) throw error;
@@ -190,8 +199,10 @@ export default function TimeTrackerPage() {
     } catch (err) {
       console.error("Failed to fetch todos:", err);
       setError("タスクの取得に失敗しました");
+    } finally {
+      setIsLoading(false);
     }
-  }, [supabase, router]);
+  }, [supabase, router, timezone]);
 
   const fetchActiveSession = useCallback(async () => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -201,7 +212,7 @@ export default function TimeTrackerPage() {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error }: { data: TimeSession[] | null; error: PostgrestError | null } = await supabase
         .from("time_sessions")
         .select("*")
         .eq("user_id", user.id)
@@ -228,13 +239,11 @@ export default function TimeTrackerPage() {
     fetchTodos();
     fetchActiveSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "SIGNED_OUT" || !session) {
-          router.push("/login");
-        }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        router.push("/login");
       }
-    );
+    });
 
     return () => subscription.unsubscribe();
   }, [fetchTodos, fetchActiveSession, supabase, router]);
@@ -249,7 +258,6 @@ export default function TimeTrackerPage() {
     return () => clearInterval(interval);
   }, [isTracking, startTime]);
 
-  // Cleanup on component unmount (in-app navigation)
   useEffect(() => {
     return () => {
       if (isTracking && currentSession && startTime) {
@@ -277,9 +285,7 @@ export default function TimeTrackerPage() {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hrs.toString().padStart(2, "0")}:${mins
-      .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -304,84 +310,90 @@ export default function TimeTrackerPage() {
 
       {error && <div className="text-red-500 mb-4">{error}</div>}
 
-      {isTracking && currentSession && (
-        <div className="mb-6 text-center">
-          <p className="text-lg font-semibold">計測中: {currentSession.task}</p>
-          <p className="text-2xl font-bold mt-2">{formatTime(elapsedTime)}</p>
-          <div className="mt-4 flex justify-center space-x-4">
-            <button
-              onClick={() => stopTracking()}
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 flex items-center"
-            >
-              <FaStop className="mr-2" /> 終了
-            </button>
-            <button
-              onClick={discardSession}
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 flex items-center"
-            >
-              <FaTrash className="mr-2" /> 破棄
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!isTracking && (
+      {isLoading ? (
+        <p className="text-gray-500 text-center">読み込み中...</p>
+      ) : (
         <>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">タスクを選択</h2>
-            {todos.length > 0 ? (
-              <ul className="space-y-2">
-                {todos.map((todo) => (
-                  <li key={todo.id}>
-                    <button
-                      onClick={() => handleTodoSelect(todo)}
-                      className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200"
-                    >
-                      <div className="flex items-center space-x-2 mr-2">
-                        {todo.text}  
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-gray-500">本日までの未完了タスクがありません</p>
-            )}
-          </div>
-
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">カテゴリを選択</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {categories.map((category) => (
+          {isTracking && currentSession && (
+            <div className="mb-6 text-center">
+              <p className="text-lg font-semibold">計測中: {currentSession.task}</p>
+              <p className="text-2xl font-bold mt-2">{formatTime(elapsedTime)}</p>
+              <div className="mt-4 flex justify-center space-x-4">
                 <button
-                  key={category}
-                  onClick={() => handleCategorySelect(category)}
-                  className="p-2 bg-gray-100 rounded hover:bg-gray-200"
+                  onClick={() => stopTracking()}
+                  className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 flex items-center"
                 >
-                  {category}
+                  <FaStop className="mr-2" /> 終了
                 </button>
-              ))}
+                <button
+                  onClick={discardSession}
+                  className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 flex items-center"
+                >
+                  <FaTrash className="mr-2" /> 破棄
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">カスタムカテゴリ</h2>
-            <input
-              type="text"
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleCustomCategorySubmit()}
-              placeholder="カテゴリを入力..."
-              className="w-full p-2 border rounded bg-gray-100"
-            />
-            <button
-              onClick={handleCustomCategorySubmit}
-              className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-              disabled={!customCategory.trim()}
-            >
-              <FaPlay className="inline mr-2" /> 開始
-            </button>
-          </div>
+          {!isTracking && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-2">タスクを選択</h2>
+                {todos.length > 0 ? (
+                  <ul className="space-y-2">
+                    {todos.map((todo) => (
+                      <li key={todo.id}>
+                        <button
+                          onClick={() => handleTodoSelect(todo)}
+                          className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200"
+                        >
+                          <div className="flex items-center space-x-2 mr-2">
+                            {todo.text}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500">本日までの未完了タスクがありません</p>
+                )}
+              </div>
+
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-2">カテゴリを選択</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => handleCategorySelect(category)}
+                      className="p-2 bg-gray-100 rounded hover:bg-gray-200"
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-2">カスタムカテゴリ</h2>
+                <input
+                  type="text"
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleCustomCategorySubmit()}
+                  placeholder="カテゴリを入力..."
+                  className="w-full p-2 border rounded bg-gray-100"
+                />
+                <button
+                  onClick={handleCustomCategorySubmit}
+                  className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                  disabled={!customCategory.trim()}
+                >
+                  <FaPlay className="inline mr-2" /> 開始
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

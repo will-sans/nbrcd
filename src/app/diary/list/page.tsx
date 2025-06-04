@@ -1,12 +1,15 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaArrowLeft } from "react-icons/fa";
+import { useTimezone } from "@/lib/timezone-context";
+import { PostgrestError } from "@supabase/supabase-js";
 
 interface WorkLog {
-  id: number;
+  id: string;
   date: string;
   task_content: string;
   issues: string | null;
@@ -19,9 +22,11 @@ interface WorkLog {
 export default function DiaryListPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
+  const { timezone } = useTimezone();
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   // Parse start time from time_allocation (e.g., "10:30" from "10:30–11:00")
   const parseStartTime = (timeAllocation: string | null): number => {
@@ -29,13 +34,12 @@ export default function DiaryListPage() {
       console.log("No time_allocation provided, sorting last");
       return Infinity; // Nulls sort last
     }
-    // Match HH:MM or H:MM at the start, followed by a separator (e.g., "–")
     const match = timeAllocation.match(/^(\d{1,2}):(\d{2})/);
     if (!match) {
       console.log(`Invalid time_allocation format: ${timeAllocation}, sorting last`);
       return Infinity; // Invalid format, sort last
     }
-    const [, hours, minutes] = match; // Skip full match, take hours and minutes
+    const [, hours, minutes] = match;
     const parsedHours = parseInt(hours);
     const parsedMinutes = parseInt(minutes);
     if (parsedHours < 0 || parsedHours > 23 || parsedMinutes < 0 || parsedMinutes > 59) {
@@ -47,20 +51,20 @@ export default function DiaryListPage() {
 
   useEffect(() => {
     const fetchWorkLogs = async () => {
+      setIsLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("User not authenticated:", userError?.message);
         router.push("/login");
+        setIsLoading(false);
         return;
       }
 
       try {
-        // Use date-only filter for the selected date
         const dateFilter = selectedDate; // YYYY-MM-DD format
         console.log("Fetching work logs for date:", dateFilter);
 
-        // Fetch work logs for the selected date, casting date to DATE type
-        const { data: logs, error: logError } = await supabase
+        const { data: logs, error: logError }: { data: WorkLog[] | null; error: PostgrestError | null } = await supabase
           .from("work_logs")
           .select("id, date, task_content, issues, learnings, emotion, todo_id, time_allocation")
           .eq("user_id", user.id)
@@ -70,12 +74,10 @@ export default function DiaryListPage() {
           throw new Error(logError.message || "作業日誌の取得に失敗しました");
         }
 
-        // Sort logs by start time of time_allocation
-        const sortedLogs = logs.sort((a, b) => {
+        const sortedLogs = (logs || []).sort((a, b) => {
           const timeA = parseStartTime(a.time_allocation);
           const timeB = parseStartTime(b.time_allocation);
           if (timeA !== timeB) return timeA - timeB;
-          // If times are equal or both invalid, sort by date
           return new Date(a.date).getTime() - new Date(b.date).getTime();
         });
 
@@ -85,6 +87,8 @@ export default function DiaryListPage() {
         const errorMessage = err instanceof Error ? err.message : "作業日誌の取得に失敗しました";
         console.error("Failed to fetch work logs:", err);
         setErrorMessage(errorMessage);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -96,12 +100,10 @@ export default function DiaryListPage() {
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router, supabase, selectedDate]);
+    return () => subscription.unsubscribe();
+  }, [router, supabase, selectedDate, timezone]);
 
-  const handleRowClick = (logId: number) => {
+  const handleRowClick = (logId: string) => {
     router.push(`/diary?page=edit&id=${logId}`);
   };
 
@@ -144,43 +146,47 @@ export default function DiaryListPage() {
         />
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="p-2 text-sm font-medium">時間</th>
-              <th className="p-2 text-sm font-medium">作業内容</th>
-              <th className="p-2 text-sm font-medium">課題</th>
-              <th className="p-2 text-sm font-medium">学び</th>
-              <th className="p-2 text-sm font-medium">感情</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workLogs.length > 0 ? (
-              workLogs.map((log) => (
-                <tr
-                  key={log.id}
-                  className="border-b hover:bg-gray-100 cursor-pointer"
-                  onClick={() => handleRowClick(log.id)}
-                >
-                  <td className="p-2 text-sm">{formatTimeRange(log.time_allocation)}</td>
-                  <td className="p-2 text-sm">{log.task_content}</td>
-                  <td className="p-2 text-sm">{log.issues || "-"}</td>
-                  <td className="p-2 text-sm">{log.learnings || "-"}</td>
-                  <td className="p-2 text-sm">{log.emotion || "-"}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="p-2 text-center text-gray-500">
-                  この日の作業日誌がありません
-                </td>
+      {/* Loading State */}
+      {isLoading ? (
+        <p className="text-gray-500 text-center">読み込み中...</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-200">
+                <th className="p-2 text-sm font-medium">時間</th>
+                <th className="p-2 text-sm font-medium">作業内容</th>
+                <th className="p-2 text-sm font-medium">課題</th>
+                <th className="p-2 text-sm font-medium">学び</th>
+                <th className="p-2 text-sm font-medium">感情</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {workLogs.length > 0 ? (
+                workLogs.map((log) => (
+                  <tr
+                    key={log.id}
+                    className="border-b hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleRowClick(log.id)}
+                  >
+                    <td className="p-2 text-sm">{formatTimeRange(log.time_allocation)}</td>
+                    <td className="p-2 text-sm">{log.task_content}</td>
+                    <td className="p-2 text-sm">{log.issues || "-"}</td>
+                    <td className="p-2 text-sm">{log.learnings || "-"}</td>
+                    <td className="p-2 text-sm">{log.emotion || "-"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="p-2 text-center text-gray-500">
+                    この日の作業日誌がありません
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

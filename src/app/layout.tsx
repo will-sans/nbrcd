@@ -1,6 +1,8 @@
+
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerInitializer from "./ServiceWorkerInitializer";
+import { TimezoneProvider } from "@/lib/timezone-context";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -9,7 +11,7 @@ export const metadata = {
   description: "A philosophical chat application",
   icons: {
     icon: "/nbrcd_logo.png",
-    apple: "/nbrcd_logo.png", // iPhone用アイコン
+    apple: "/nbrcd_logo.png",
   },
 };
 
@@ -19,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="ja">
       <head>
         <link rel="manifest" href="/manifest.json"></link>
         <meta name="mobile-web-app-capable" content="yes"></meta>
@@ -31,7 +33,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ServiceWorkerInitializer />
-        {children}
+        <TimezoneProvider>{children}</TimezoneProvider>
       </body>
     </html>
   );
