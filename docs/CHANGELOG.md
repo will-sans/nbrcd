@@ -245,3 +245,51 @@ This document tracks changes to the database schema for the NBRCD app.
 - This fix resolves incorrect date handling for `due_date` and `completed_date`, ensuring alignment with JST (e.g., `due_date` should be `2025-06-01 15:00:00+00` for 2025-06-02 tasks).
 - Developers should verify that tasks added at 2025-06-02 04:36 JST have `date` ≈ `2025-06-01 19:36:00+00`, `due_date` = `2025-06-01 15:00:00+00`, and `completed_date` ≈ `2025-06-01 19:38:00+00` in the database, with UI display as 2025-06-02.
 - No database schema changes were required.
+
+## 2025-06-0４ 
+
+### Added
+- Implemented "学び検索" (Learning Search) feature on the home page with a new button above "学びセッション".
+- Created `/learning-search` page for searching questions by author, book, chapter, category, and free-text search.
+- Added pagination to display up to 10 questions per page with a "もっと見る" (Load More) button.
+- Fetched distinct filter options (authors, books, chapters, categories) from the `questions` table for dropdowns using client-side deduplication.
+- Added vector-based search using the `match_questions` function with a UI toggle for semantic search, displaying additional fields (`learning`, `quote`, `similarity`).
+- Added "Back to Home" button to `learning-search` page.
+- Implemented dynamic filtering in `learning-search` to limit book, chapter, and category options based on selected author, book, and chapter.
+
+### Removed
+- Removed the goal display section from the home page.
+- Removed the "やりたいことを選んでください" text from the home page.
+- Removed the "ポイント" (Points) button from the home page navigation.
+
+### Changed
+- Reordered navigation items to place "学び検索" above "学びセッション".
+- Simplified home page logic by removing unused goal-related state and queries.
+- Replaced server-side `distinct` queries with client-side deduplication in `/learning-search` to resolve TypeScript errors.
+- Updated `match_questions` function to use `plpgsql`, include additional columns (`learning`, `quote`, `category`, `book`, `chapter`), and support `match_count` parameter.
+- Changed `match_questions` to use `extensions.vector` instead of `public.vector` to match `pgvector` schema.
+- Updated `match_questions` to include `extensions` in `search_path` to resolve operator access.
+- Modified `match_questions` to use dynamic SQL with `EXECUTE` to fix operator resolution in `PL/pgSQL`.
+- Updated `learning-search` page UI with compact layout, smaller fonts, and dark mode support.
+- Adjusted `match_questions` to cast `id` to `text` to match return type.
+- Increased vector search `threshold` to `0.8` in `learning-search` for stricter similarity.
+- Memoized `fetchFilterOptions` and `fetchQuestions` with `useCallback` to address `useEffect` dependency warnings.
+- Sourced author options in `learning-search` from `src/data/philosophers` instead of database query.
+- Corrected import path from `@/data/philosopher` to `@/data/philosophers`.
+- Unified "Back to Home" button styling with `FaArrowLeft` (`text-gray-600 hover:text-gray-800`, `size={24}`).
+- Updated `learning-search` to sort questions by `id` ascending.
+- Enhanced chapter filtering in `learning-search` to restrict chapters to the selected book.
+- Enhanced category filtering in `learning-search` to restrict categories to the selected author, book, and chapter.
+- Aligned `learning-search` screen width with home page (`max-w-2xl`).
+
+### Fixed
+- Resolved TS2304 error in `learning-search` by correcting `mappedData` to `data` in keyword search block.
+- Fixed infinite spinning of "もっと見る" button by adding `isFetchingRef` guard, total count check, and debouncing `handleLoadMore`.
+- Fixed chapter filtering to only show chapters from the selected book.
+- Fixed category filtering to only show categories from the selected author, book, and chapter.
+
+### Security
+- Secured the `match_questions` function by explicitly setting `search_path` to prevent schema manipulation vulnerabilities.
+
+**Date**: 2025-06-04  
+**Editor**: WILL / Grok
