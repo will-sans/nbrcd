@@ -5,8 +5,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { useTimezone } from "@/lib/timezone-context";
+import { PostgrestError } from "@supabase/supabase-js";
 
-// Sample IANA timezones (expand as needed)
+// Sample IANA timezones
 const availableTimezones = [
   "Asia/Tokyo",
   "America/New_York",
@@ -15,7 +16,7 @@ const availableTimezones = [
   "Australia/Sydney",
 ];
 
-// Force dynamic rendering to avoid prerendering issues
+// Force dynamic rendering
 export const dynamic = "force-dynamic";
 
 export default function SettingsPage() {
@@ -44,18 +45,17 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const fetchUserData = async () => {
+      setIsLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("Failed to get user:", userError?.message);
         router.push("/login");
         return;
       }
-      console.log("User already logged in on mount:", user);
 
       try {
         const { data: { session }, error: fetchSessionError } = await supabase.auth.getSession();
         if (fetchSessionError || !session) {
-          console.error("Failed to get session:", fetchSessionError?.message);
           throw new Error("セッションの取得に失敗しました");
         }
 
@@ -64,22 +64,18 @@ export default function SettingsPage() {
           "X-Refresh-Token": session.refresh_token,
         };
 
-        const response = await fetch(`/api/users/me`, {
-          headers,
-        });
-
+        const response = await fetch(`/api/users/me`, { headers });
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Failed to fetch user: ${response.status} ${errorText}`);
-          throw new Error(`Failed to fetch user: ${response.statusText}`);
+          throw new Error(`ユーザー情報の取得に失敗しました: ${response.status} ${errorText}`);
         }
 
         const data = await response.json();
         setCurrentUser(data.username);
         setCurrentEmail(data.email);
 
-        // Fetch the user's latest session metadata to get the goal
-        const { data: sessionData, error: sessionDataError } = await supabase
+        // Fetch goal from user_session_metadata
+        const { data: sessionData, error: sessionDataError }: { data: { goal: string | null } | null; error: PostgrestError | null } = await supabase
           .from("user_session_metadata")
           .select("goal")
           .eq("user_id", user.id)
@@ -88,18 +84,16 @@ export default function SettingsPage() {
           .single();
 
         if (sessionDataError) {
-          if (sessionDataError.code === "PGRST116") {
-            setCurrentGoal(null);
-          } else {
-            console.error("Failed to fetch user session metadata:", sessionDataError);
+          if (sessionDataError.code !== "PGRST116") {
             throw new Error("セッション情報の取得に失敗しました");
           }
+          setCurrentGoal(null);
         } else {
           setCurrentGoal(sessionData?.goal || null);
         }
 
-        // Fetch timezone from profiles table
-        const { data: profileData, error: profileError } = await supabase
+        // Fetch timezone from profiles
+        const { data: profileData, error: profileError }: { data: { timezone: string } | null; error: PostgrestError | null } = await supabase
           .from("profiles")
           .select("timezone")
           .eq("user_id", user.id)
@@ -107,16 +101,19 @@ export default function SettingsPage() {
 
         if (profileError) {
           if (profileError.code !== "PGRST116") {
-            console.error("Failed to fetch profile timezone:", profileError);
             throw new Error("タイムゾーン情報の取得に失敗しました");
           }
+          // No profile exists; use default
+          setCurrentTimezone("Asia/Tokyo");
+          setTimezone("Asia/Tokyo");
         } else {
           const fetchedTimezone = profileData?.timezone || "Asia/Tokyo";
           setCurrentTimezone(fetchedTimezone);
           setTimezone(fetchedTimezone);
         }
-      } catch (err: unknown) {
+      } catch (err) {
         console.error("ユーザー情報の取得に失敗しました:", err);
+        setError(err instanceof Error ? err.message : "エラーが発生しました");
         localStorage.removeItem("userId");
         localStorage.removeItem("currentUser");
         router.push("/login");
@@ -128,7 +125,6 @@ export default function SettingsPage() {
     fetchUserData();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth state changed:", event, session);
       if (event === "SIGNED_OUT" || !session) {
         router.push("/login");
       }
@@ -140,9 +136,7 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        throw new Error(error.message || "ログアウトに失敗しました");
-      }
+      if (error) throw new Error(error.message || "ログアウトに失敗しました");
       setCurrentUser(null);
       setCurrentEmail(null);
       setSuccess("ログアウトしました");
@@ -174,12 +168,14 @@ export default function SettingsPage() {
         throw new Error(authError.message || "ユーザーの削除に失敗しました");
       }
 
-      await supabase.from("point_logs").delete().eq("user_id", user.id);
-      await supabase.from("todos").delete().eq("user_id", user.id);
-      await supabase.from("sessions").delete().eq("user_id", user.id);
-      await supabase.from("action_logs").delete().eq("user_id", user.id);
-      await supabase.from("user_settings").delete().eq("user_id", user.id);
-      await supabase.from("profiles").delete().eq("user_id", user.id);
+      await Promise.all([
+        supabase.from("point_logs").delete().eq("user_id", user.id),
+        supabase.from("todos").delete().eq("user_id", user.id),
+        supabase.from("sessions").delete().eq("user_id", user.id),
+        supabase.from("action_logs").delete().eq("user_id", user.id),
+        supabase.from("user_settings").delete().eq("user_id", user.id),
+        supabase.from("profiles").delete().eq("user_id", user.id),
+      ]);
 
       setCurrentUser(null);
       setCurrentEmail(null);
@@ -249,7 +245,6 @@ export default function SettingsPage() {
       }
 
       const { error: authError } = await supabase.auth.updateUser(updates);
-
       if (authError) {
         throw new Error(authError.message || "ユーザー情報の更新に失敗しました");
       }
@@ -316,11 +311,10 @@ export default function SettingsPage() {
 
       const { data: { session }, error: updateSessionError } = await supabase.auth.getSession();
       if (updateSessionError || !session) {
-        console.error("Failed to get session:", updateSessionError?.message);
         throw new Error("セッションの取得に失敗しました");
       }
 
-      const { data: currentMetadata, error: fetchError } = await supabase
+      const { data: currentMetadata, error: fetchError }: { data: { summary: string; user_inputs: string[]; selected_action: string | null } | null; error: PostgrestError | null } = await supabase
         .from("user_session_metadata")
         .select("summary, user_inputs, selected_action")
         .eq("user_id", user.id)
@@ -329,7 +323,6 @@ export default function SettingsPage() {
         .single();
 
       if (fetchError && fetchError.code !== "PGRST116") {
-        console.error("Failed to fetch current metadata:", fetchError);
         throw new Error("現在のメタデータの取得に失敗しました");
       }
 
@@ -373,10 +366,12 @@ export default function SettingsPage() {
         throw new Error("ユーザーIDが見つかりません");
       }
 
-      const { error } = await supabase
+      const { error }: { error: PostgrestError | null } = await supabase
         .from("profiles")
-        .update({ timezone: newTimezone })
-        .eq("user_id", user.id);
+        .upsert(
+          { user_id: user.id, timezone: newTimezone, updated_at: new Date().toISOString() },
+          { onConflict: "user_id" }
+        );
 
       if (error) {
         throw new Error(error.message || "タイムゾーンの更新に失敗しました");
@@ -530,7 +525,7 @@ export default function SettingsPage() {
             <div>
               <h3 className="text-lg font-semibold">Q: Safariで複数のタブが開いてしまうのはなぜですか？</h3>
               <p className="text-gray-700">
-                A: NBRCDはPWA（プログレッシブウェブアプリ）として動作します。Safariで共有（画面下真ん中にある四角に上矢印のマーク）→ホーム画面に追加すると、アプリとしてご利用いただけますので、Safaiで複数開く問題は起こらなくなります。
+                A: NBRCDはPWA（プログレッシブウェブアプリ）として動作します。Safariで共有（画面下真ん中にある四角に上矢印のマーク）→ホーム画面に追加すると、アプリとしてご利用いただけますので、Safariで複数開く問題は起こらなくなります。
               </p>
             </div>
             <div>
@@ -647,7 +642,7 @@ export default function SettingsPage() {
             <input
               type="password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)} // Fixed bug
+              onChange={(e) => setNewPassword(e.target.value)}
               placeholder="新しいパスワード（任意）"
               className="border p-2 w-full mb-2"
               minLength={6}

@@ -368,3 +368,19 @@ This document tracks changes to the database schema for the NBRCD app.
   - Check FAQ and policy links navigate correctly.
 - Run `npm run build` to confirm no ESLint/TypeScript errors.
 - No database schema changes were required, but ensure `profiles` table exists with `timezone` column.
+
+### Fixed
+- **SettingsPage**: Updated to work with RLS-enabled `profiles` table, addressing Supabase linter error (`rls_disabled_in_public`). Modified `fetchUserData` and `handleUpdateTimezone` to use RLS-compatible queries with `user_id = auth.uid()`. Changed `handleUpdateTimezone` to `upsert` for profile creation. Enhanced error handling for RLS denials. (#ISSUE_NUMBER)
+
+### Added
+- **RLS on Profiles Table**: Enabled Row Level Security (RLS) on `public.profiles` table with policies for `SELECT`, `UPDATE`, `INSERT`, and `DELETE`, restricting access to authenticated users’ own rows (`user_id = auth.uid()`). Updated permissions to revoke `anon` and `public` access. (#ISSUE_NUMBER)
+
+### Notes
+- This change resolves the critical security issue where `profiles` was publicly accessible without RLS, ensuring user data (e.g., `timezone`) is protected.
+- Developers should test `SettingsPage` at 2025-06-05 00:46 JST:
+  - Verify timezone updates save to `profiles.timezone` and sync with `TimezoneContext`.
+  - Confirm other settings (username, email, password, goal) and user actions (logout, delete) work correctly.
+  - Test unauthenticated access to `profiles` via PostgREST to ensure RLS denies access.
+- Run `npm run build` to confirm no ESLint/TypeScript errors.
+- Ensure `profiles` table schema includes `timezone` (`text`) and `user_id` (`UUID`) with RLS enabled.
+- Apply similar RLS checks to other public tables (e.g., `todos`, `work_logs`) if exposed via PostgREST.
