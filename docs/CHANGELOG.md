@@ -425,3 +425,7 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Added
 - **TodoListPage**: Implemented `startTimeTracking` function to insert records into a `time_tracking` Supabase table when the “時間計測を開始” button is clicked in the task detail modal.
 - **TodoListPage**: Added a delete button to the task detail modal, reusing the `handleDelete` function for consistency with swipe-to-delete.
+
+### Changed
+- Set explicit `search_path = public, auth` for `public.create_profile_for_new_user` function to resolve Supabase linter warning `function_search_path_mutable`. Secures trigger on `auth.users` for creating profiles in `public.profiles` with `Asia/Tokyo` timezone. ([Issue #<TBD>])
+- Set explicit `search_path = public` for `public.update_updated_at_column` function to resolve Supabase linter warning `function_search_path_mutable`. Enhances security by preventing schema manipulation for timestamp updates. ([Issue #<TBD>])
