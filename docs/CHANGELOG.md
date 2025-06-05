@@ -384,3 +384,13 @@ This document tracks changes to the database schema for the NBRCD app.
 - Run `npm run build` to confirm no ESLint/TypeScript errors.
 - Ensure `profiles` table schema includes `timezone` (`text`) and `user_id` (`UUID`) with RLS enabled.
 - Apply similar RLS checks to other public tables (e.g., `todos`, `work_logs`) if exposed via PostgREST.
+
+## 2025-06-05
+### Changed
+- TodoListPage: Adjusted task item layout to display task text and priority buttons in a single row using flex - - - items-center justify-between, removing the mt-2 margin and combining elements into one div.
+- TodoListPage: Removed due date display from task list items as it’s redundant with due date grouping.
+- TodoListPage: Modified handleAddTask to reload todos from Supabase after adding a new task to ensure correct display order.
+- TodoListPage: Updated layout to match LearningSearch component, including dark mode support, Tailwind CSS classes for inputs, buttons, and cards, and consistent typography.
+### Fixed
+- TodoListPage: Resolved ESLint warning for missing fetchTodos dependency in useEffect by wrapping fetchTodos in useCallback and adding it to the dependency array.
+

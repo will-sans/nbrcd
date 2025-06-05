@@ -1,9 +1,8 @@
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabaseClient } from '@/utils/supabase/client';
+import { getSupabaseClient } from "@/utils/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { FaArrowLeft, FaArrowUp, FaArrowDown } from "react-icons/fa";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
@@ -45,46 +44,46 @@ export default function TodoListPage() {
   const supabase = getSupabaseClient();
   const { timezone } = useTimezone();
 
+  const fetchTodos = useCallback(async () => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("Failed to get user:", userError?.message);
+      router.push("/login");
+      return;
+    }
+
+    try {
+      const { data, error }: { data: SupabaseTodo[] | null; error: PostgrestError | null } = await supabase
+        .from("todos")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("completed", false)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .order("priority", { ascending: false })
+        .order("date", { ascending: true });
+
+      if (error) {
+        throw new Error(error.message || "タスクの取得に失敗しました");
+      }
+
+      const mappedData = data?.map((todo) => ({
+        id: todo.id,
+        text: todo.text,
+        completed: todo.completed,
+        date: todo.date,
+        dueDate: todo.due_date,
+        completedDate: todo.completed_date,
+        priority: todo.priority,
+      })) || [];
+
+      setTodos(mappedData);
+    } catch (err) {
+      console.error("Error:", err);
+      router.push("/login");
+    }
+  }, [supabase, router]);
+
   useEffect(() => {
-    const fetchTodos = async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        console.error("Failed to get user:", userError?.message);
-        router.push("/login");
-        return;
-      }
-
-      try {
-        const { data, error }: { data: SupabaseTodo[] | null; error: PostgrestError | null } = await supabase
-          .from("todos")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("completed", false)
-          .order("due_date", { ascending: true, nullsFirst: false })
-          .order("priority", { ascending: false })
-          .order("date", { ascending: true });
-
-        if (error) {
-          throw new Error(error.message || "タスクの取得に失敗しました");
-        }
-
-        const mappedData = data?.map((todo) => ({
-          id: todo.id,
-          text: todo.text,
-          completed: todo.completed,
-          date: todo.date,
-          dueDate: todo.due_date,
-          completedDate: todo.completed_date,
-          priority: todo.priority,
-        })) || [];
-
-        setTodos(mappedData);
-      } catch (err) {
-        console.error("Error:", err);
-        router.push("/login");
-      }
-    };
-
     fetchTodos();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -95,7 +94,7 @@ export default function TodoListPage() {
     });
 
     return () => subscription.unsubscribe();
-  }, [router, supabase]);
+  }, [router, supabase, fetchTodos]);
 
   useEffect(() => {
     setSwipeStates((prev) => {
@@ -149,12 +148,9 @@ export default function TodoListPage() {
       return;
     }
 
-    // Get current time in UTC
     const nowUTC = new Date();
-    // Set 'due_date' to start of current day in user's timezone
     const nowInTimezone = toZonedTime(nowUTC, timezone);
     const dueDateInTimezone = new Date(nowInTimezone.getFullYear(), nowInTimezone.getMonth(), nowInTimezone.getDate());
-    // Convert to UTC for storage
     const dueDateUTC = new Date(
       Date.UTC(
         dueDateInTimezone.getFullYear(),
@@ -189,8 +185,8 @@ export default function TodoListPage() {
         throw new Error(error.message || "タスクの追加に失敗しました");
       }
 
-      setTodos([...todos, newTodo]);
       setNewTask("");
+      await fetchTodos();
     } catch (err) {
       console.error("Failed to add task:", err);
     }
@@ -206,7 +202,6 @@ export default function TodoListPage() {
       return;
     }
 
-    // Get current time in UTC
     const completedDateUTC = new Date();
 
     try {
@@ -344,7 +339,6 @@ export default function TodoListPage() {
       return;
     }
 
-    // Parse dueDate as start of day in user's timezone, then convert to UTC
     const dueDateInTimezone = new Date(dueDate);
     const dueDateUTC = new Date(
       Date.UTC(
@@ -409,22 +403,20 @@ export default function TodoListPage() {
     }, {});
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="ホームに戻る"
         >
           <FaArrowLeft size={24} />
         </button>
-
-        <h1 className="text-2xl font-bold">タスクリスト</h1>
-
-        <div className="flex space-x-2">
+        <h1 className="text-xl font-semibold dark:text-gray-100">タスクリスト</h1>
+        <div className="w-12">
           <button
             onClick={() => router.push("/todo/completed")}
-            className="text-gray-600 hover:text-gray-800 text-2xl"
+            className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 text-2xl"
             aria-label="完了済みタスクへ移動"
           >
             ☑️
@@ -432,27 +424,27 @@ export default function TodoListPage() {
         </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-center">
+      <div className="mb-4">
         <input
           id="new-task"
           type="text"
           value={newTask}
           onChange={(e) => setNewTask(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && handleAddTask()}
-          placeholder="タスクの追加..."
-          className="w-full p-2 border rounded bg-gray-100 text-center"
+          placeholder="タスクを追加..."
+          className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
       {Object.keys(sortedGroupedTodos).length > 0 ? (
         Object.keys(sortedGroupedTodos).map((date) => (
-          <div key={date}>
-            <h2 className="text-lg font-semibold mb-2">{date}</h2>
-            <ul className="space-y-2">
+          <div key={date} className="mb-4">
+            <h2 className="text-base font-medium mb-2 dark:text-gray-100">{date}</h2>
+            <ul className="space-y-3">
               {sortedGroupedTodos[date].map((todo) => (
                 <li key={todo.id} className="relative">
                   <div
-                    className="flex items-center justify-between p-2 border rounded bg-gray-100 overflow-hidden"
+                    className="p-3 bg-gray-100 rounded-lg dark:bg-gray-800 overflow-hidden"
                     style={{
                       transform: completedTodos.includes(todo.id)
                         ? "translateX(100%)"
@@ -463,49 +455,46 @@ export default function TodoListPage() {
                     }}
                   >
                     <div
-                      className="flex items-center w-full"
+                      className="flex items-center justify-between w-full"
                       onTouchStart={(e) => handleTouchStart(todo.id, e)}
                       onTouchMove={(e) => handleTouchMove(todo.id, e)}
                       onTouchEnd={() => handleTouchEnd(todo.id)}
                     >
-                      <input
-                        type="radio"
-                        onChange={() => handleToggle(todo.id)}
-                        className="mr-2"
-                      />
-                      <span
-                        onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
-                        className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer" : ""}
-                      >
-                        {todo.text}{" "}
-                        {todo.dueDate && (
-                          <span className="text-xs text-gray-500">
-                            (期限: {formatInTimeZone(new Date(todo.dueDate), timezone, "yyyy-MM-dd")})
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2 mr-2">
-                      <button
-                        onClick={() => handlePriorityChange(todo.id, "up")}
-                        className="text-red-500 hover:text-red-700"
-                        aria-label="優先度を上げる"
-                      >
-                        <FaArrowUp />
-                      </button>
-                      {todo.priority}
-                      <button
-                        onClick={() => handlePriorityChange(todo.id, "down")}
-                        className="text-green-500 hover:text-green-700"
-                        aria-label="優先度を下げる"
-                      >
-                        <FaArrowDown />
-                      </button>
+                      <div className="flex items-center flex-grow min-w-0">
+                        <input
+                          type="radio"
+                          onChange={() => handleToggle(todo.id)}
+                          className="mr-2 dark:accent-gray-600"
+                        />
+                        <span
+                          onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
+                          className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer text-sm dark:text-gray-300 truncate" : "text-sm dark:text-gray-300 truncate"}
+                        >
+                          {todo.text}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        <button
+                          onClick={() => handlePriorityChange(todo.id, "up")}
+                          className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          aria-label="優先度を上げる"
+                        >
+                          <FaArrowUp />
+                        </button>
+                        <span className="text-sm dark:text-gray-300">{todo.priority}</span>
+                        <button
+                          onClick={() => handlePriorityChange(todo.id, "down")}
+                          className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                          aria-label="優先度を下げる"
+                        >
+                          <FaArrowDown />
+                        </button>
+                      </div>
                     </div>
                     <div className="absolute right-0 h-full flex items-center">
                       <button
                         onClick={() => handleDelete(todo.id)}
-                        className="bg-red-500 text-white h-full px-4 py-2"
+                        className="bg-red-500 text-white h-full px-4 py-2 dark:bg-red-600 dark:hover:bg-red-700"
                         style={{ display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none" }}
                       >
                         削除
@@ -518,31 +507,31 @@ export default function TodoListPage() {
           </div>
         ))
       ) : (
-        <p className="text-gray-500 text-center">タスクがありません。新しいタスクを追加してください。</p>
+        <p className="text-gray-500 text-center text-sm dark:text-gray-400">タスクがありません。新しいタスクを追加してください。</p>
       )}
 
       {selectedTodoId !== null && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-4 rounded">
-            <h3 className="text-lg font-semibold mb-2">期限を設定</h3>
+          <div className="bg-white p-4 rounded-lg dark:bg-gray-800">
+            <h3 className="text-base font-medium mb-2 dark:text-gray-100">期限を設定</h3>
             <input
               id="due-date"
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="border p-2 mb-2 w-full"
+              className="border p-2 mb-2 w-full rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             />
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setSelectedTodoId(null)}
-                className="bg-gray-500 text-white px-4 py-2 rounded"
+                className="bg-gray-500 text-white px-4 py-2 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600 text-sm"
                 aria-label="期限設定モーダルを閉じる"
               >
                 キャンセル
               </button>
               <button
                 onClick={saveDueDate}
-                className="bg-blue-500 text-white px-4 py-2 rounded"
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
                 aria-label="期限を保存する"
               >
                 保存
