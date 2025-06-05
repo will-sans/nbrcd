@@ -1,8 +1,10 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
+import { FaArrowLeft } from "react-icons/fa";
 
 export default function DiaryPage() {
   const router = useRouter();
@@ -43,7 +45,6 @@ export default function DiaryPage() {
       }
 
       if (workLogId) {
-        // Editing mode
         setIsEditing(true);
         setLogId(workLogId);
         const { data, error } = await supabase
@@ -75,10 +76,8 @@ export default function DiaryPage() {
           });
         }
       } else {
-        // New log mode
         let timeAllocation = "";
         if (todoId) {
-          // Check for existing log
           const { data: existingLog, error: logError } = await supabase
             .from("work_logs")
             .select("id")
@@ -98,7 +97,6 @@ export default function DiaryPage() {
             return;
           }
 
-          // Fetch time session for todo_id
           const { data: session, error: sessionError } = await supabase
             .from("time_sessions")
             .select("start_time, end_time")
@@ -165,7 +163,6 @@ export default function DiaryPage() {
 
     try {
       if (isEditing && logId) {
-        // Update existing log
         const { error } = await supabase
           .from("work_logs")
           .update({
@@ -188,7 +185,6 @@ export default function DiaryPage() {
           throw new Error(error.message || "日報の更新に失敗しました");
         }
       } else {
-        // Create new log
         const { error } = await supabase.from("work_logs").insert({
           date: formData.date,
           task_content: formData.task_content,
@@ -264,115 +260,125 @@ export default function DiaryPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen">
-      <h1 className="text-2xl font-bold mb-4">
-        {isEditing ? "作業日誌編集" : "作業日誌入力"}
-      </h1>
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => router.push("/diary/list")}
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+          aria-label="日誌一覧に戻る"
+        >
+          <FaArrowLeft size={24} />
+        </button>
+        <h1 className="text-xl font-semibold dark:text-gray-100">
+          {isEditing ? "作業日誌編集" : "作業日誌入力"}
+        </h1>
+        <div className="w-12" />
+      </div>
       {errorMessage && (
-        <div className="text-red-500 mb-4">{errorMessage}</div>
+        <div className="text-red-500 mb-4 text-sm dark:text-red-400">{errorMessage}</div>
       )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium">日付</label>
+          <label className="block text-sm font-medium dark:text-gray-300">日付</label>
           <input
             type="date"
             name="date"
             value={formData.date}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">作業内容</label>
+          <label className="block text-sm font-medium dark:text-gray-300">作業内容</label>
           <textarea
             name="task_content"
             value={formData.task_content}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             rows={4}
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">目標</label>
+          <label className="block text-sm font-medium dark:text-gray-300">目標</label>
           <textarea
             name="goal"
             value={formData.goal}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             rows={2}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">時間配分</label>
+          <label className="block text-sm font-medium dark:text-gray-300">時間配分</label>
           <input
             type="text"
             name="time_allocation"
             value={formData.time_allocation}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             placeholder="例: 13:30–14:35"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">課題</label>
+          <label className="block text-sm font-medium dark:text-gray-300">課題</label>
           <textarea
             name="issues"
             value={formData.issues}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             rows={2}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">解決策</label>
+          <label className="block text-sm font-medium dark:text-gray-300">解決策</label>
           <textarea
             name="solutions"
             value={formData.solutions}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             rows={2}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">次のステップ</label>
+          <label className="block text-sm font-medium dark:text-gray-300">次のステップ</label>
           <textarea
             name="next_steps"
             value={formData.next_steps}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             rows={2}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">学び</label>
+          <label className="block text-sm font-medium dark:text-gray-300">学び</label>
           <textarea
             name="learnings"
             value={formData.learnings}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             rows={2}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">KPI/進捗指標</label>
+          <label className="block text-sm font-medium dark:text-gray-300">KPI/進捗指標</label>
           <input
             type="text"
             name="kpi"
             value={formData.kpi}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             placeholder="例: 移行完了率: 50%"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">感情/体調</label>
+          <label className="block text-sm font-medium dark:text-gray-300">感情/体調</label>
           <select
             name="emotion"
             value={formData.emotion}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
           >
             <option value="">選択してください</option>
             <option value="集中できた">集中できた</option>
@@ -385,7 +391,7 @@ export default function DiaryPage() {
           <button
             type="submit"
             disabled={isSubmitting || isDeleting}
-            className={`bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 ${
+            className={`bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-sm flex-1 ${
               isSubmitting || isDeleting ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
@@ -396,7 +402,7 @@ export default function DiaryPage() {
               type="button"
               onClick={handleDelete}
               disabled={isDeleting || isSubmitting}
-              className={`bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 ${
+              className={`bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-sm flex-1 ${
                 isDeleting || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -407,7 +413,7 @@ export default function DiaryPage() {
             type="button"
             onClick={() => router.push("/diary/list")}
             disabled={isSubmitting || isDeleting}
-            className={`bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 ${
+            className={`bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-700 text-sm flex-1 ${
               isSubmitting || isDeleting ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >

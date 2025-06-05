@@ -47,11 +47,11 @@ export default function Home() {
   ];
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => router.push("/settings")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="設定へ移動"
         >
           <FaBars size={24} />
@@ -65,21 +65,21 @@ export default function Home() {
             priority
             className="cursor-pointer"
           />
-          <h1 className="text-xl font-semibold text-gray-800">NBRCD</h1>
+          <h1 className="text-xl font-semibold dark:text-gray-100">NBRCD</h1>
         </div>
-        <h1 className="text-sm font-semibold text-gray-800">{currentUser}</h1>
+        <h1 className="text-sm font-semibold dark:text-gray-300">{currentUser}</h1>
       </div>
 
       {isLoading ? (
         <div className="text-center">
-          <p className="text-lg font-semibold">読み込み中...</p>
+          <p className="text-base font-semibold dark:text-gray-100">読み込み中...</p>
         </div>
       ) : error ? (
-        <div className="text-red-500 mb-4 text-center">
+        <div className="text-red-500 mb-4 text-center text-sm dark:text-red-400">
           <p>{error}</p>
           <button
             onClick={checkUser}
-            className="mt-2 text-blue-500 hover:underline"
+            className="mt-2 text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
           >
             再試行する
           </button>
@@ -90,12 +90,12 @@ export default function Home() {
             <motion.button
               key={item.name}
               onClick={() => router.push(item.path)}
-              className="flex items-center p-4 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex items-center p-4 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <span className="mr-4 text-gray-600">{item.icon}</span>
-              <span className="text-lg font-medium">{item.name}</span>
+              <span className="mr-4 text-gray-600 dark:text-gray-400">{item.icon}</span>
+              <span className="text-base font-medium dark:text-gray-100">{item.name}</span>
             </motion.button>
           ))}
         </div>

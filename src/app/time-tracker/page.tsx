@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -289,45 +288,45 @@ export default function TimeTrackerPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="ホームに戻る"
         >
           <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-2xl font-bold">時間計測</h1>
+        <h1 className="text-xl font-semibold dark:text-gray-100">時間計測</h1>
         <button
           onClick={() => router.push("/schedule")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="スケジュールを見る"
         >
           <FaChartPie size={24} />
         </button>
       </div>
 
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+      {error && <div className="text-red-500 mb-4 text-sm dark:text-red-400">{error}</div>}
 
       {isLoading ? (
-        <p className="text-gray-500 text-center">読み込み中...</p>
+        <p className="text-gray-500 text-center text-sm dark:text-gray-500">読み込み中...</p>
       ) : (
         <>
           {isTracking && currentSession && (
             <div className="mb-6 text-center">
-              <p className="text-lg font-semibold">計測中: {currentSession.task}</p>
-              <p className="text-2xl font-bold mt-2">{formatTime(elapsedTime)}</p>
+              <p className="text-base font-semibold dark:text-gray-100">計測中: {currentSession.task}</p>
+              <p className="text-xl font-bold mt-2 dark:text-gray-100">{formatTime(elapsedTime)}</p>
               <div className="mt-4 flex justify-center space-x-4">
                 <button
                   onClick={() => stopTracking()}
-                  className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 flex items-center"
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 flex items-center text-sm dark:bg-red-600 dark:hover:bg-red-700"
                 >
                   <FaStop className="mr-2" /> 終了
                 </button>
                 <button
                   onClick={discardSession}
-                  className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 flex items-center"
+                  className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center text-sm dark:bg-gray-600 dark:hover:bg-gray-700"
                 >
                   <FaTrash className="mr-2" /> 破棄
                 </button>
@@ -338,14 +337,14 @@ export default function TimeTrackerPage() {
           {!isTracking && (
             <>
               <div className="mb-6">
-                <h2 className="text-lg font-semibold mb-2">タスクを選択</h2>
+                <h2 className="text-base font-semibold mb-2 dark:text-gray-100">タスクを選択</h2>
                 {todos.length > 0 ? (
                   <ul className="space-y-2">
                     {todos.map((todo) => (
                       <li key={todo.id}>
                         <button
                           onClick={() => handleTodoSelect(todo)}
-                          className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200"
+                          className="w-full text-left p-2 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-sm dark:text-gray-300"
                         >
                           <div className="flex items-center space-x-2 mr-2">
                             {todo.text}
@@ -355,18 +354,18 @@ export default function TimeTrackerPage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-gray-500">本日までの未完了タスクがありません</p>
+                  <p className="text-gray-500 text-sm dark:text-gray-500">本日までの未完了タスクがありません</p>
                 )}
               </div>
 
               <div className="mb-6">
-                <h2 className="text-lg font-semibold mb-2">カテゴリを選択</h2>
+                <h2 className="text-base font-semibold mb-2 dark:text-gray-100">カテゴリを選択</h2>
                 <div className="grid grid-cols-2 gap-2">
                   {categories.map((category) => (
                     <button
                       key={category}
                       onClick={() => handleCategorySelect(category)}
-                      className="p-2 bg-gray-100 rounded hover:bg-gray-200"
+                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-sm dark:text-gray-300"
                     >
                       {category}
                     </button>
@@ -375,18 +374,18 @@ export default function TimeTrackerPage() {
               </div>
 
               <div className="mb-6">
-                <h2 className="text-lg font-semibold mb-2">カスタムカテゴリ</h2>
+                <h2 className="text-base font-semibold mb-2 dark:text-gray-100">カスタムカテゴリ</h2>
                 <input
                   type="text"
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && handleCustomCategorySubmit()}
                   placeholder="カテゴリを入力..."
-                  className="w-full p-2 border rounded bg-gray-100"
+                  className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
                 />
                 <button
                   onClick={handleCustomCategorySubmit}
-                  className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                  className="mt-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 flex items-center text-sm"
                   disabled={!customCategory.trim()}
                 >
                   <FaPlay className="inline mr-2" /> 開始

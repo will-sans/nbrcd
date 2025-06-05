@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -124,67 +123,72 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/time-tracker")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="時間計測に戻る"
         >
           <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-2xl font-bold">スケジュール</h1>
-        <div />
+        <h1 className="text-xl font-semibold dark:text-gray-100">スケジュール</h1>
+        <div className="w-12" />
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">日付を選択</label>
+        <label className="block text-sm font-medium mb-1 dark:text-gray-300">日付を選択</label>
         <input
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="p-2 border rounded bg-gray-100"
+          className="p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
 
-      {error && <div className="text-red-500 mb-4">{error}</div>}
+      {error && <div className="text-red-500 mb-4 text-sm dark:text-red-400">{error}</div>}
 
       {isLoading ? (
-        <p className="text-gray-500 text-center">読み込み中...</p>
+        <p className="text-gray-500 text-center text-sm dark:text-gray-500">読み込み中...</p>
       ) : (
         <>
           <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">タイムライン</h2>
+            <h2 className="text-base font-semibold mb-2 dark:text-gray-100">タイムライン</h2>
             {sessions.length > 0 ? (
               <ul className="space-y-2">
                 {sessions.map((session) => (
-                  <li key={session.id} className="p-2 bg-gray-100 rounded">
-                    <p>
+                  <li key={session.id} className="p-2 bg-gray-100 rounded-lg dark:bg-gray-800">
+                    <p className="text-sm dark:text-gray-300">
                       <strong>{session.task}</strong> ({session.category})
                     </p>
-                    <p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
                       {formatTime(session.start_time)} -{" "}
                       {session.end_time ? formatTime(session.end_time) : "進行中"}
                     </p>
                     {session.duration && (
-                      <p>所要時間: {formatDuration(session.duration)}</p>
+                      <p className="text-xs dark:text-gray-300">所要時間: {formatDuration(session.duration)}</p>
                     )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-gray-500">この日の記録はありません</p>
+              <p className="text-gray-500 text-sm dark:text-gray-500">この日の記録はありません</p>
             )}
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold mb-2">カテゴリ別時間</h2>
+            <h2 className="text-base font-semibold mb-2 dark:text-gray-100">カテゴリ別時間</h2>
             {sessions.some((s) => s.duration) ? (
               <Pie
                 data={getPieChartData()}
                 options={{
                   plugins: {
-                    legend: { position: "bottom" },
+                    legend: { 
+                      position: "bottom",
+                      labels: {
+                        color: "rgb(209, 213, 219)", // gray-300 for dark mode
+                      },
+                    },
                     tooltip: {
                       callbacks: {
                         label: (context) =>
@@ -195,7 +199,7 @@ export default function SchedulePage() {
                 }}
               />
             ) : (
-              <p className="text-gray-500">データがありません</p>
+              <p className="text-gray-500 text-sm dark:text-gray-500">データがありません</p>
             )}
           </div>
         </>

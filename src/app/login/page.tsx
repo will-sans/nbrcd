@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -70,7 +71,6 @@ export default function LoginPage() {
         throw new Error('ログインに失敗しました');
       }
 
-      // Verify the session is set after login
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
         throw new Error('セッションの取得に失敗しました');
@@ -129,7 +129,6 @@ export default function LoginPage() {
         throw new Error('ユーザー登録に失敗しました');
       }
 
-      // Verify the session is set after registration
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
         throw new Error('セッションの取得に失敗しました');
@@ -137,7 +136,6 @@ export default function LoginPage() {
 
       console.log("Registration successful, session:", session);
 
-      // ユーザー設定の初期化
       const { error: settingsError } = await supabase
         .from('user_settings')
         .insert({
@@ -166,37 +164,41 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col justify-center">
-      <h1 className="text-2xl font-bold mb-4 text-center">{mode === 'login' ? 'ログイン' : '新規登録'}</h1>
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col justify-center">
+      <h1 className="text-xl font-semibold mb-4 text-center dark:text-gray-100">{mode === 'login' ? 'ログイン' : '新規登録'}</h1>
 
-      <div className="mb-6 p-4 border rounded bg-gray-100">
+      <div className="mb-6 p-4 border rounded-lg bg-gray-100 dark:bg-gray-800">
         <div className="flex justify-center mb-4">
           <button
             onClick={() => setMode('login')}
-            className={`px-4 py-2 mr-2 ${mode === 'login' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            className={`px-4 py-2 mr-2 text-sm rounded-lg ${
+              mode === 'login' ? 'bg-blue-500 text-white dark:bg-blue-600' : 'bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+            }`}
           >
             ログイン
           </button>
           <button
             onClick={() => setMode('register')}
-            className={`px-4 py-2 ${mode === 'register' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            className={`px-4 py-2 text-sm rounded-lg ${
+              mode === 'register' ? 'bg-blue-500 text-white dark:bg-blue-600' : 'bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+            }`}
           >
             新規登録
           </button>
         </div>
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        {success && <div className="text-green-500 mb-4">{success}</div>}
+        {error && <div className="text-red-500 mb-4 text-sm dark:text-red-400">{error}</div>}
+        {success && <div className="text-green-500 mb-4 text-sm dark:text-green-400">{success}</div>}
         <form onSubmit={mode === 'login' ? handleLogin : handleRegister}>
           {mode === 'register' && (
             <div className="mb-2">
-              <label htmlFor="username" className="block mb-1">ユーザー名</label>
+              <label htmlFor="username" className="block text-sm font-medium mb-1 dark:text-gray-300">ユーザー名</label>
               <input
                 id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="ユーザー名を入力してください"
-                className="border p-2 w-full"
+                className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
                 required
                 minLength={3}
                 autoComplete="username"
@@ -204,27 +206,27 @@ export default function LoginPage() {
             </div>
           )}
           <div className="mb-2">
-            <label htmlFor="email" className="block mb-1">メールアドレス</label>
+            <label htmlFor="email" className="block text-sm font-medium mb-1 dark:text-gray-300">メールアドレス</label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="メールアドレスを入力してください"
-              className="border p-2 w-full"
+              className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
               required
               autoComplete="email"
             />
           </div>
           <div className="mb-2">
-            <label htmlFor="password" className="block mb-1">パスワード</label>
+            <label htmlFor="password" className="block text-sm font-medium mb-1 dark:text-gray-300">パスワード</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="パスワードを入力してください"
-              className="border p-2 w-full"
+              className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
               required
               minLength={6}
               autoComplete="current-password"
@@ -232,7 +234,7 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+            className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
             aria-label={mode === 'login' ? 'ログイン' : '新規登録'}
           >
             {mode === 'login' ? 'ログイン' : '登録'}

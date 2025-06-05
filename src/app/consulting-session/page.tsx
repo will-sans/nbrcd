@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -29,8 +30,8 @@ export default function ConsultingSession() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [promptMode, setPromptMode] = useState<string>("concise"); // Default mode
-  const [sessionStarted, setSessionStarted] = useState<boolean>(false); // Track session start
+  const [promptMode, setPromptMode] = useState<string>("concise");
+  const [sessionStarted, setSessionStarted] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = getSupabaseClient();
 
@@ -104,7 +105,7 @@ export default function ConsultingSession() {
     setInput("");
     setLoading(true);
     setError(null);
-    setSessionStarted(true); // Lock mode after first message
+    setSessionStarted(true);
 
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -140,7 +141,6 @@ export default function ConsultingSession() {
         relevantContext = 'No relevant context found.';
       }
 
-      // Fetch prompt based on mode
       const promptIdMap: { [key: string]: number } = {
         concise: 1,
         conversational: 2,
@@ -151,7 +151,6 @@ export default function ConsultingSession() {
         throw new Error('プロンプトの読み込みに失敗しました: ' + promptMode);
       }
 
-      // Fetch user summary from user_session_metadata
       const { data: metadata } = await supabase
         .from('user_session_metadata')
         .select('summary')
@@ -162,7 +161,6 @@ export default function ConsultingSession() {
 
       const userSummary = metadata?.summary || `${user.email}さんのメタデータ：まだセッション履歴がありません。`;
 
-      // Replace placeholders in prompt
       const systemPrompt = prompt.prompt_text
         .replace('{{relevantContext}}', relevantContext)
         .replace('{{userSummary}}', userSummary)
@@ -224,22 +222,22 @@ export default function ConsultingSession() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="ホームに戻る"
         >
           <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-semibold">コンサルティング</h1>
+        <h1 className="text-xl font-semibold dark:text-gray-100">コンサルティング</h1>
         <div className="w-36">
           <select
             value={promptMode}
             onChange={(e) => setPromptMode(e.target.value)}
-            disabled={sessionStarted} // Disable after first message
-            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-gray-200"
+            disabled={sessionStarted}
+            className="block w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm disabled:bg-gray-200 dark:disabled:bg-gray-700"
           >
             <option value="concise">簡潔な洞察</option>
             <option value="conversational">会話形式</option>
@@ -249,12 +247,12 @@ export default function ConsultingSession() {
       </div>
 
       {error && (
-        <div className="text-red-500 mb-4 flex items-center justify-between">
+        <div className="text-red-500 mb-4 flex items-center justify-between text-sm dark:text-red-400">
           <span>{error}</span>
           {isOnline && (
             <button
               onClick={() => setError(null)}
-              className="text-blue-500 hover:underline"
+              className="text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
             >
               閉じる
             </button>
@@ -272,8 +270,10 @@ export default function ConsultingSession() {
             >
               <div
                 className={`inline-block p-2 rounded-lg ${
-                  message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-black"
-                }`}
+                  message.role === "user"
+                    ? "bg-blue-500 text-white dark:bg-blue-600"
+                    : "bg-gray-100 text-black dark:bg-gray-800 dark:text-gray-100"
+                } text-sm`}
                 style={{ whiteSpace: "pre-line" }}
               >
                 {message.content}
@@ -282,7 +282,7 @@ export default function ConsultingSession() {
           ))}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 max-w-2xl mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 dark:bg-gray-900 dark:border-gray-700 max-w-2xl mx-auto">
         <form onSubmit={handleSubmit} className="flex items-center">
           <input
             id="consult-input"
@@ -290,13 +290,13 @@ export default function ConsultingSession() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="悩みや課題を入力してください..."
-            className="flex-1 border p-2 rounded-l-md"
+            className="flex-1 p-2 border rounded-l-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
             ref={inputRef}
             disabled={loading || !isOnline}
           />
           <button
             type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-md"
+            className="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
             disabled={loading || !isOnline}
             aria-label="送信"
           >

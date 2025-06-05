@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaCheck, FaBook } from "react-icons/fa";
+import { FaBook, FaArrowLeft } from "react-icons/fa";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import { ja } from "date-fns/locale";
@@ -237,19 +236,19 @@ export default function CompletedTodoPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/todo/list")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="ToDoリストに戻る"
         >
-          <FaCheck size={24} />
+          <FaArrowLeft size={24} />
         </button>
-        <h1 className="text-2xl font-bold">完了済み</h1>
+        <h1 className="text-xl font-semibold dark:text-gray-100">完了済みタスク</h1>
         <button
           onClick={() => router.push("/diary/list")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="作業日誌一覧を見る"
         >
           <FaBook size={24} />
@@ -257,17 +256,17 @@ export default function CompletedTodoPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-gray-500 text-center">読み込み中...</p>
+        <p className="text-gray-500 text-center dark:text-gray-500">読み込み中...</p>
       ) : (
         <>
           <div className="mb-4">
-            <p>完了: {completedTodos.length} タスク</p>
+            <p className="text-sm dark:text-gray-300">完了: {completedTodos.length} タスク</p>
           </div>
 
           {Object.keys(groupedTodos).length > 0 ? (
             Object.entries(groupedTodos).map(([date, todos]) => (
               <div key={date} className="mb-4">
-                <h2 className="text-lg font-semibold mb-2">{date}</h2>
+                <h2 className="text-base font-semibold mb-2 dark:text-gray-100">{date}</h2>
                 <ul className="space-y-2">
                   {todos.map((todo) => (
                     <li
@@ -286,7 +285,7 @@ export default function CompletedTodoPage() {
                       }}
                       onClick={() => !loggedTodoIds.has(todo.id) && handleRowClick(todo)}
                     >
-                      <div className={`flex items-center ${loggedTodoIds.has(todo.id) ? "bg-gray-300" : "bg-gray-100"} p-2 rounded overflow-hidden`}>
+                      <div className={`flex items-center ${loggedTodoIds.has(todo.id) ? "bg-gray-200 dark:bg-gray-700" : "bg-gray-100 dark:bg-gray-800"} p-2 rounded-lg overflow-hidden`}>
                         <div
                           className="flex items-center w-full"
                           style={{
@@ -301,12 +300,12 @@ export default function CompletedTodoPage() {
                             type="checkbox"
                             checked={true}
                             onChange={() => handleRestoreTodo(todo.id)}
-                            className="mr-2"
+                            className="mr-2 dark:accent-gray-600"
                             disabled={loggedTodoIds.has(todo.id)}
                           />
                           <div className="flex-1">
-                            <span className="line-through">{todo.text}</span>
-                            <p className="text-xs text-gray-500">
+                            <span className="line-through text-sm dark:text-gray-300">{todo.text}</span>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">
                               {todo.completed_date
                                 ? formatInTimeZone(toZonedTime(new Date(todo.completed_date), timezone), timezone, "HH:mm", { locale: ja })
                                 : ""}
@@ -320,7 +319,7 @@ export default function CompletedTodoPage() {
                                 e.stopPropagation();
                                 handleDeleteTodo(todo.id);
                               }}
-                              className="bg-red-500 text-white h-full px-4 py-2"
+                              className="bg-red-500 text-white h-full px-4 py-2 dark:bg-red-600 dark:hover:bg-red-700"
                               style={{
                                 display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none",
                               }}
@@ -336,7 +335,7 @@ export default function CompletedTodoPage() {
               </div>
             ))
           ) : (
-            <p className="text-gray-500 text-center">完了: 0 タスク</p>
+            <p className="text-gray-500 text-center text-sm dark:text-gray-500">完了: 0 タスク</p>
           )}
         </>
       )}

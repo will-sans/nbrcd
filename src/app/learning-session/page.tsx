@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -84,7 +85,7 @@ export default function LearningSession() {
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener("online", handleOnline);
-    window.removeEventListener("offline", handleOffline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
       window.removeEventListener("online", handleOnline);
@@ -312,7 +313,6 @@ export default function LearningSession() {
           }
           summaryPart = summarySentences.join("。");
           if (summaryPart) {
-            // Remove literal \n or escaped \\n
             summaryPart = summaryPart.replace(/\\n$/, '').trim();
           }
         }
@@ -544,9 +544,8 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       return;
     }
 
-    // Combine goal and summary, clean the query
     let query = `${sessionMetadata?.goal || ""}を目標としており、 ${sessionMetadata?.summary || ""}`.trim();
-    query = query.replace(/^.*さんのメタデータ：/, '').trim(); // Remove "Will-testさんのメタデータ：" prefix
+    query = query.replace(/^.*さんのメタデータ：/, '').trim();
     console.log("Similarity search query:", query);
 
     if (!query) {
@@ -555,7 +554,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
     }
 
     try {
-      // Proactively refresh the session
       const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
       if (refreshError || !refreshedSession?.session) {
         console.error("Failed to refresh session:", refreshError?.message);
@@ -590,7 +588,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       console.log("Similarity search results:", results);
 
       if (!results || results.length === 0) {
-        // Fallback: Fetch random questions if no matches found
         const { data: fallbackQuestions, error: fallbackError } = await supabase
           .from('questions')
           .select('id, philosophy, question, learning, quote, category, book, chapter')
@@ -604,7 +601,7 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
 
         const fallbackResults = fallbackQuestions.map((q: QuestionFromSupabase) => ({
           ...q,
-          similarity: 0, // No similarity score for fallback
+          similarity: 0,
         }));
         setRecommendedQuestions(fallbackResults);
         setShowRecommendations(true);
@@ -621,7 +618,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
   };
 
   const handleSelectRecommendedQuestion = (question: RecommendedQuestion) => {
-    // Fetch the full question details to start the session
     const fetchQuestionDetails = async () => {
       const { data, error } = await supabase
         .from('questions')
@@ -635,7 +631,7 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         return;
       }
 
-      setSelectedPhilosopherId(data.philosophy); // Set the philosopher based on the selected question
+      setSelectedPhilosopherId(data.philosophy);
       setDailyQuestion(data);
       setMessages([]);
       setSessionStarted(false);
@@ -643,14 +639,14 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       setSystemMessage(null);
       setSelectedAction(null);
       setShowRecommendations(false);
-      setInput(""); // Clear input to start a new session
+      setInput("");
     };
 
     fetchQuestionDetails();
   };
 
   useEffect(() => {
-    if (selectedPhilosopherId && !dailyQuestion) { // Only fetch if no question is already selected
+    if (selectedPhilosopherId && !dailyQuestion) {
       const fetchRandomQuestion = async () => {
         const philosopherQuestions = await fetchQuestions(selectedPhilosopherId);
         if (philosopherQuestions.length === 0) {
@@ -659,7 +655,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
           return;
         }
 
-        // Randomly select a question from the philosopher's pool
         const randomIndex = Math.floor(Math.random() * philosopherQuestions.length);
         const randomQuestion = philosopherQuestions[randomIndex];
         setDailyQuestion(randomQuestion);
@@ -713,19 +708,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         throw new Error(errorData.error || "Failed to save log");
       }
       console.log("Successfully saved log to server:", log);
-
-      // const { error: sessionError } = await supabase
-      //   .from('sessions')
-      //   .insert({
-      //     user_id: user.id,
-      //     conversation: messages,
-      //     analysis: { sessionCount: messages.length },
-      //     score: messages.length * 10,
-      //   });
-
-      // if (sessionError) {
-      //   console.error("Failed to save session:", sessionError);
-      // }
     } catch (error) {
       console.error("Failed to save log:", error);
     }
@@ -777,7 +759,6 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         console.error("Failed to save session metadata in background:", err);
       });
 
-      // Reset session state to allow philosopher selection in the next session
       setSelectedPhilosopherId("");
       setDailyQuestion(null);
       setMessages([]);
@@ -1018,7 +999,7 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
   };
 
   const handlePhilosopherChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!sessionStarted && dailyQuestion === null) { // Only allow changes if no question is selected and session hasn't started
+    if (!sessionStarted && dailyQuestion === null) {
       setSelectedPhilosopherId(e.target.value);
     }
   };
@@ -1054,35 +1035,32 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen flex flex-col">
+    <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => router.push("/")}
-          className="text-gray-600 hover:text-gray-800"
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
           aria-label="ホームに戻る"
         >
           <FaArrowLeft size={24} />
         </button>
-
         <div className="flex items-center space-x-2">
-          <div className="flex-shrink-0">
-            <Image
-              src="/nbrcd_logo.png"
-              alt="NBRCD Logo"
-              width={40}
-              height={40}
-              priority
-              onClick={handleLogoClick}
-              className="cursor-pointer"
-            />
-          </div>
+          <Image
+            src="/nbrcd_logo.png"
+            alt="NBRCD Logo"
+            width={40}
+            height={40}
+            priority
+            onClick={handleLogoClick}
+            className="cursor-pointer"
+          />
           <div className="w-36">
             <select
               id="philosopher"
               value={selectedPhilosopherId}
               onChange={handlePhilosopherChange}
-              disabled={sessionStarted || dailyQuestion !== null} // Disable if session started or a question is selected
-              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-gray-200"
+              disabled={sessionStarted || dailyQuestion !== null}
+              className="block w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm disabled:bg-gray-200 dark:disabled:bg-gray-700"
             >
               <option value="">哲学者を選択してください</option>
               {philosophers.map((philosopher) => (
@@ -1093,16 +1071,13 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
             </select>
           </div>
         </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => router.push("/todo/list")}
-            className="text-gray-600 hover:text-gray-800"
-            aria-label="タスクリストへ移動"
-          >
-            <FaCheck size={24} />
-          </button>
-        </div>
+        <button
+          onClick={() => router.push("/todo/list")}
+          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+          aria-label="タスクリストへ移動"
+        >
+          <FaCheck size={24} />
+        </button>
       </div>
 
       <AnimatePresence>
@@ -1121,19 +1096,19 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
               animate={{ y: "0%", opacity: 1 }}
               exit={{ y: "-100%", opacity: 0 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="fixed top-0 left-6 w-full max-w-2xl bg-white rounded-b-lg shadow-lg z-50 p-6"
+              className="fixed top-0 left-6 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-b-lg shadow-lg z-50 p-6"
             >
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">あなたのメタデータ</h2>
+                <h2 className="text-base font-semibold dark:text-gray-100">あなたのメタデータ</h2>
                 <button
                   onClick={handleCloseModal}
-                  className="text-gray-600 hover:text-gray-800"
+                  className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                   aria-label="モーダルを閉じる"
                 >
                   <FaTimes size={20} />
                 </button>
               </div>
-              <p className="text-gray-700 whitespace-pre-line">{sessionMetadata?.summary}</p>
+              <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-line">{sessionMetadata?.summary}</p>
             </motion.div>
           </>
         )}
@@ -1155,19 +1130,19 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
               animate={{ y: "0%", opacity: 1 }}
               exit={{ y: "-100%", opacity: 0 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="fixed top-0 left-6 w-full max-w-2xl bg-white rounded-b-lg shadow-lg z-50 p-6"
+              className="fixed top-0 left-6 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-b-lg shadow-lg z-50 p-6"
             >
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">質問の詳細</h2>
+                <h2 className="text-base font-semibold dark:text-gray-100">質問の詳細</h2>
                 <button
                   onClick={() => setIsQuestionModalOpen(false)}
-                  className="text-gray-600 hover:text-gray-800"
+                  className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                   aria-label="モーダルを閉じる"
                 >
                   <FaTimes size={20} />
                 </button>
               </div>
-              <div className="text-gray-700">
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
                 <p className="mb-2"><strong>学び:</strong> {dailyQuestion.learning}</p>
                 <p className="mb-2"><strong>カテゴリ:</strong> {dailyQuestion.category}</p>
                 <p className="mb-2"><strong>書籍:</strong> {dailyQuestion.book}</p>
@@ -1179,19 +1154,19 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       </AnimatePresence>
 
       {!selectedPhilosopherId && (
-        <div className="mb-4 p-4 bg-gray-100 rounded text-center">
-          <h2 className="text-lg font-semibold">
+        <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-center">
+          <h2 className="text-base font-semibold dark:text-gray-100">
             {isLoading ? "読み込み中..." : `こんにちは、${currentUser}さん`}
           </h2>
           {isLoading && (
             <button
               onClick={() => checkUser()}
-              className="mt-2 text-blue-500 hover:underline"
+              className="mt-2 text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300 text-sm"
             >
               再試行する
             </button>
           )}
-          <p className="text-gray-600 mt-2">
+          <p className="text-gray-600 dark:text-gray-400 text-sm mt-2">
             哲学者を選択してセッションを開始してください。
           </p>
         </div>
@@ -1201,20 +1176,20 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
         <div className="mb-4">
           <button
             onClick={fetchRecommendedQuestions}
-            className="flex items-center p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            className="flex items-center p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
             aria-label="おすすめ質問を表示"
           >
             <FaLightbulb size={20} className="mr-2" />
             おすすめ質問を表示
           </button>
           {showRecommendations && recommendedQuestions.length > 0 && (
-            <div className="mt-2 p-4 bg-gray-100 rounded">
-              <h3 className="font-semibold mb-2">おすすめの質問</h3>
+            <div className="mt-2 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <h3 className="text-sm font-semibold mb-2 dark:text-gray-100">おすすめの質問</h3>
               <ul className="space-y-2">
                 {recommendedQuestions.map((question) => (
                   <li
                     key={question.id}
-                    className="p-2 border rounded bg-white cursor-pointer hover:bg-gray-200 transition-colors"
+                    className="p-2 border rounded-lg bg-white dark:bg-gray-900 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 text-sm dark:text-gray-300"
                     onClick={() => handleSelectRecommendedQuestion(question)}
                   >
                     {question.question}
@@ -1228,20 +1203,20 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
 
       {selectedPhilosopherId && dailyQuestion && (
         <div
-          className="mb-4 p-4 bg-gray-100 rounded cursor-pointer hover:bg-gray-200 transition"
+          className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
           onClick={handleQuestionClick}
         >
-          <h2 className="text-lg font-semibold">{dailyQuestion.question}</h2>
+          <h2 className="text-base font-semibold dark:text-gray-100">{dailyQuestion.question}</h2>
         </div>
       )}
 
       {error && (
-        <div className="text-red-500 mb-4 flex items-center justify-between">
+        <div className="text-red-500 mb-4 flex items-center justify-between text-sm dark:text-red-400">
           <span>{error}</span>
           {isOnline && (
             <button
               onClick={() => setError(null)}
-              className="text-blue-500 hover:underline"
+              className="text-blue-500 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
             >
               閉じる
             </button>
@@ -1261,8 +1236,10 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
                 >
                   <div
                     className={`inline-block p-2 rounded-lg ${
-                      message.role === "user" ? "bg-blue-500 text-white" : "bg-gray-200 text-black"
-                    }`}
+                      message.role === "user"
+                        ? "bg-blue-500 text-white dark:bg-blue-600"
+                        : "bg-gray-100 text-black dark:bg-gray-800 dark:text-gray-100"
+                    } text-sm`}
                     style={{ whiteSpace: "pre-line" }}
                   >
                     {message.content}
@@ -1270,9 +1247,9 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
                 </div>
               ))}
             {parsedResult && parsedResult.actions.length > 0 && dailyQuestion && (
-              <div className="mt-4 p-4 bg-gray-100 rounded">
-                <p className="font-semibold">アクションを一つ選んでください</p>
-                <div className="mt-2">
+              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <p className="text-sm font-semibold dark:text-gray-100">アクションを一つ選んでください</p>
+                <div className="mt-2 space-y-2">
                   {parsedResult.actions.map((action, index) => (
                     <div key={index} className="flex items-center">
                       <input
@@ -1282,21 +1259,21 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
                         value={action}
                         checked={selectedAction === action}
                         onChange={() => handleActionSelect(action)}
-                        className="mr-2"
+                        className="mr-2 dark:accent-gray-600"
                       />
-                      <label htmlFor={`action-${index}`}>{action}</label>
+                      <label htmlFor={`action-${index}`} className="text-sm dark:text-gray-300">{action}</label>
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 font-semibold">教訓： {dailyQuestion.quote}</p>
-                <p className="mt-2 font-semibold">関連書籍紹介</p>
-                <p>{dailyQuestion.book} - {dailyQuestion.chapter}</p>
+                <p className="mt-2 text-sm font-semibold dark:text-gray-100">教訓： {dailyQuestion.quote}</p>
+                <p className="mt-2 text-sm font-semibold dark:text-gray-100">関連書籍紹介</p>
+                <p className="text-sm dark:text-gray-300">{dailyQuestion.book} - {dailyQuestion.chapter}</p>
               </div>
             )}
           </div>
 
           {!parsedResult && (
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 max-w-2xl mx-auto">
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 dark:bg-gray-900 dark:border-gray-700 max-w-2xl mx-auto">
               <form onSubmit={handleSubmit} className="flex items-center">
                 <input
                   id="chat-input"
@@ -1304,13 +1281,13 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={sessionStarted ? "メッセージを入力..." : "セッションを開始するには入力してください"}
-                  className="flex-1 border p-2 rounded-l-md"
+                  className="flex-1 p-2 border rounded-l-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
                   ref={inputRef}
                   disabled={loading || !isOnline}
                 />
                 <button
                   type="submit"
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r-md"
+                  className="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
                   disabled={loading || !isOnline}
                   aria-label={sessionStarted ? "メッセージを送信" : "セッションを開始"}
                 >
