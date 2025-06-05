@@ -405,3 +405,23 @@ This document tracks changes to the database schema for the NBRCD app.
 - **UI Consistency**: Updated `app/settings/page.tsx` to align with `LearningSearch` layout, including dark mode support (`bg-gray-900`, `text-gray-100`), standardized container, header with `FaArrowLeft` and `FaBars`, tab navigation, inputs (`bg-gray-50 dark:bg-gray-800`), buttons (`bg-blue-500 dark:bg-blue-600`), and modals (`bg-white dark:bg-gray-900`). Adjusted typography and error/success messages for dark mode.
 - **UI Consistency**: Updated `app/privacy-policy/page.tsx` to match `LearningSearch` styling, including container, header with `FaArrowLeft`, and content sections (`bg-gray-100 dark:bg-gray-800`). Ensured dark mode text colors (`text-gray-300`, `text-blue-400` for links) and consistent typography (`text-sm`, `text-base`).
 - **UI Consistency**: Updated `app/terms-of-service/page.tsx` to align with `LearningSearch`, standardizing container, header with `FaArrowLeft`, and content sections (`bg-gray-100 dark:bg-gray-800`). Adjusted text colors (`text-gray-300`, `text-blue-400`) and typography for dark mode compatibility.
+
+### Changed
+- **TodoListPage**: Restored preferred layout from previous version, reverting Tailwind classes (e.g., `max-w-2xl`, `mb-4`, `p-2`, `bg-gray-100` for task cards, `p-4` for modal) to match desired styling while preserving functional improvements.
+- **TodoListPage**: Updated task group date format to `yyyy年M月d日 (EEE)` for Japanese-friendly display.
+- **TodoListPage**: Reverted UI text to Japanese (e.g., "タスクリスト", "タスクを追加...", "タスク詳細") to complete the Japanese version.
+- **TodoListPage**: Removed priority arrows and number from task rows to simplify UI on small screens.
+- **TodoListPage**: Enhanced task detail modal to include editable task text, priority adjustment via number input, a button to start time tracking, and a delete button.
+- **TodoListPage**: Adjusted task item layout to display task text and checkbox in a single row using `flex items-center justify-between`.
+- **TodoListPage**: Removed due date display from task list items as it’s redundant with due date grouping.
+- **TodoListPage**: Modified `handleAddTask` to reload todos from Supabase after adding a new task to ensure correct display order.
+- **TodoListPage**: Updated layout to match `LearningSearch` component, including dark mode support and consistent typography.
+
+### Fixed
+- **TodoListPage**: Resolved ESLint warning for missing `fetchTodos` dependency in `useEffect` by wrapping `fetchTodos` in `useCallback` and adding it to the dependency array.
+- **TodoListPage**: Fixed TypeScript errors in `savePoints` function by correcting destructuring syntax for `supabase.auth.getUser()` and adding type annotations for `user` (`User | null`) and `userError` (`AuthError | null`).
+- **TodoListPage**: Fixed TypeScript error by replacing `subscription.detach()` with `subscription.unsubscribe()` in the `useEffect` cleanup for the Supabase auth state change listener.
+
+### Added
+- **TodoListPage**: Implemented `startTimeTracking` function to insert records into a `time_tracking` Supabase table when the “時間計測を開始” button is clicked in the task detail modal.
+- **TodoListPage**: Added a delete button to the task detail modal, reusing the `handleDelete` function for consistency with swipe-to-delete.

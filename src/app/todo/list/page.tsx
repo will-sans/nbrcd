@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { v4 as uuidv4 } from "uuid";
-import { FaArrowLeft, FaArrowUp, FaArrowDown } from "react-icons/fa";
+import { FaArrowLeft } from "react-icons/fa";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import { ja } from "date-fns/locale";
 import { useTimezone } from "@/lib/timezone-context";
-import { PostgrestError } from "@supabase/supabase-js";
+import { PostgrestError, User, AuthError } from "@supabase/supabase-js";
 
 interface Todo {
   id: string;
@@ -38,7 +38,9 @@ export default function TodoListPage() {
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
   const [touchStart, setTouchStart] = useState<{ [key: string]: number }>({});
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
+  const [modalTaskText, setModalTaskText] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
+  const [modalPriority, setModalPriority] = useState<number>(0);
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
   const supabase = getSupabaseClient();
@@ -114,7 +116,7 @@ export default function TodoListPage() {
       return;
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError }: { data: { user: User | null }, error: AuthError | null } = await supabase.auth.getUser();
     if (userError || !user) {
       console.warn("No user found in Supabase Auth");
       return;
@@ -259,7 +261,7 @@ export default function TodoListPage() {
     }
   };
 
-  const handlePriorityChange = async (id: string, direction: "up" | "down") => {
+  const startTimeTracking = async (taskId: string) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       console.warn("No user found in Supabase Auth");
@@ -267,27 +269,23 @@ export default function TodoListPage() {
       return;
     }
 
-    const todo = todos.find((t) => t.id === id);
-    if (!todo) return;
-
-    const newPriority = direction === "up" ? todo.priority + 1 : Math.max(0, todo.priority - 1);
-
     try {
       const { error } = await supabase
-        .from("todos")
-        .update({
-          priority: newPriority,
-        })
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .from("time_tracking")
+        .insert({
+          id: uuidv4(),
+          task_id: taskId,
+          user_id: user.id,
+          start_time: new Date().toISOString(),
+        });
 
       if (error) {
-        throw new Error(error.message || "優先度の更新に失敗しました");
+        throw new Error(error.message || "時間計測の開始に失敗しました");
       }
 
-      setTodos(todos.map((t) => (t.id === id ? { ...t, priority: newPriority } : t)));
+      console.log(`Time tracking started for task ${taskId}`);
     } catch (err) {
-      console.error("Failed to update priority:", err);
+      console.error("Failed to start time tracking:", err);
     }
   };
 
@@ -319,18 +317,22 @@ export default function TodoListPage() {
   const openDueDateModal = (id: string) => {
     setSelectedTodoId(id);
     const todo = todos.find((t) => t.id === id);
-    if (todo?.dueDate) {
-      const date = toZonedTime(new Date(todo.dueDate), timezone);
-      const formattedDate = formatInTimeZone(date, timezone, "yyyy-MM-dd");
-      setDueDate(formattedDate);
-    } else {
-      const today = toZonedTime(new Date(), timezone);
-      setDueDate(formatInTimeZone(today, timezone, "yyyy-MM-dd"));
+    if (todo) {
+      setModalTaskText(todo.text);
+      setModalPriority(todo.priority);
+      if (todo.dueDate) {
+        const date = toZonedTime(new Date(todo.dueDate), timezone);
+        const formattedDate = formatInTimeZone(date, timezone, "yyyy-MM-dd");
+        setDueDate(formattedDate);
+      } else {
+        const today = toZonedTime(new Date(), timezone);
+        setDueDate(formatInTimeZone(today, timezone, "yyyy-MM-dd"));
+      }
     }
   };
 
-  const saveDueDate = async () => {
-    if (selectedTodoId === null) return;
+  const saveTaskDetails = async () => {
+    if (selectedTodoId === null || modalTaskText.trim() === "") return;
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
@@ -352,30 +354,31 @@ export default function TodoListPage() {
       const { error } = await supabase
         .from("todos")
         .update({
+          text: modalTaskText,
           due_date: dueDateUTC.toISOString(),
+          priority: Math.max(0, modalPriority),
         })
         .eq("id", selectedTodoId)
         .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || "期限の保存に失敗しました");
+        throw new Error(error.message || "タスクの保存に失敗しました");
       }
 
-      const updatedTodos = todos.map((todo) =>
-        todo.id === selectedTodoId ? { ...todo, dueDate: dueDateUTC.toISOString() } : todo
-      );
-      setTodos(updatedTodos);
+      await fetchTodos();
       setSelectedTodoId(null);
+      setModalTaskText("");
       setDueDate("");
+      setModalPriority(0);
     } catch (err) {
-      console.error("Failed to save due date:", err);
+      console.error("Failed to save task details:", err);
     }
   };
 
   const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
     const dateObj = todo.dueDate ? new Date(todo.dueDate) : new Date(todo.date);
     const zonedDate = toZonedTime(dateObj, timezone);
-    const dateKey = formatInTimeZone(zonedDate, timezone, "MMMM d, yyyy (EEE)", { locale: ja });
+    const dateKey = formatInTimeZone(zonedDate, timezone, "yyyy年M月d日 (EEE)", { locale: ja });
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(todo);
     return acc;
@@ -462,7 +465,8 @@ export default function TodoListPage() {
                     >
                       <div className="flex items-center flex-grow min-w-0">
                         <input
-                          type="radio"
+                          type="checkbox"
+                          checked={todo.completed}
                           onChange={() => handleToggle(todo.id)}
                           className="mr-2 dark:accent-gray-600"
                         />
@@ -473,29 +477,13 @@ export default function TodoListPage() {
                           {todo.text}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0">
-                        <button
-                          onClick={() => handlePriorityChange(todo.id, "up")}
-                          className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                          aria-label="優先度を上げる"
-                        >
-                          <FaArrowUp />
-                        </button>
-                        <span className="text-sm dark:text-gray-300">{todo.priority}</span>
-                        <button
-                          onClick={() => handlePriorityChange(todo.id, "down")}
-                          className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                          aria-label="優先度を下げる"
-                        >
-                          <FaArrowDown />
-                        </button>
-                      </div>
                     </div>
                     <div className="absolute right-0 h-full flex items-center">
                       <button
                         onClick={() => handleDelete(todo.id)}
                         className="bg-red-500 text-white h-full px-4 py-2 dark:bg-red-600 dark:hover:bg-red-700"
                         style={{ display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none" }}
+                        aria-label="タスクを削除"
                       >
                         削除
                       </button>
@@ -512,27 +500,83 @@ export default function TodoListPage() {
 
       {selectedTodoId !== null && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-4 rounded-lg dark:bg-gray-800">
-            <h3 className="text-base font-medium mb-2 dark:text-gray-100">期限を設定</h3>
-            <input
-              id="due-date"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="border p-2 mb-2 w-full rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
-            />
+          <div className="bg-white p-4 rounded-lg dark:bg-gray-800 w-full max-w-md">
+            <h3 className="text-base font-medium mb-4 dark:text-gray-100">タスク詳細</h3>
+            <div className="mb-4">
+              <label htmlFor="task-text" className="block text-sm dark:text-gray-300 mb-1">
+                タスク名
+              </label>
+              <input
+                id="task-text"
+                type="text"
+                value={modalTaskText}
+                onChange={(e) => setModalTaskText(e.target.value)}
+                className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
+                placeholder="タスク名を入力..."
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="due-date" className="block text-sm dark:text-gray-300 mb-1">
+                期限
+              </label>
+              <input
+                id="due-date"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="priority" className="block text-sm dark:text-gray-300 mb-1">
+                優先度
+              </label>
+              <input
+                id="priority"
+                type="number"
+                min="0"
+                value={modalPriority}
+                onChange={(e) => setModalPriority(parseInt(e.target.value) || 0)}
+                className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
+              />
+            </div>
+            <button
+              onClick={() => startTimeTracking(selectedTodoId)}
+              className="w-full p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-sm mb-4"
+              aria-label="時間計測を開始"
+            >
+              時間計測を開始
+            </button>
             <div className="flex justify-end space-x-2">
               <button
-                onClick={() => setSelectedTodoId(null)}
+                onClick={() => {
+                  if (selectedTodoId) handleDelete(selectedTodoId);
+                  setSelectedTodoId(null);
+                  setModalTaskText("");
+                  setDueDate("");
+                  setModalPriority(0);
+                }}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg dark:bg-red-600 dark:hover:bg-red-700 text-sm"
+                aria-label="タスクを削除"
+              >
+                削除
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedTodoId(null);
+                  setModalTaskText("");
+                  setDueDate("");
+                  setModalPriority(0);
+                }}
                 className="bg-gray-500 text-white px-4 py-2 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600 text-sm"
-                aria-label="期限設定モーダルを閉じる"
+                aria-label="キャンセル"
               >
                 キャンセル
               </button>
               <button
-                onClick={saveDueDate}
+                onClick={saveTaskDetails}
                 className="bg-blue-500 text-white px-4 py-2 rounded-lg dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
-                aria-label="期限を保存する"
+                aria-label="保存"
               >
                 保存
               </button>
