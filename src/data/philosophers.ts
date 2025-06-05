@@ -8,4 +8,5 @@ export const philosophers = [
   { id: 'ezoe', name: '江副浩正' },
   { id: 'yanai', name: '柳井正' },
   { id: 'garber', name: 'マイケル E.ガーバー' },
+  { id: 'mikitani', name: '三木谷浩史' },
 ];
