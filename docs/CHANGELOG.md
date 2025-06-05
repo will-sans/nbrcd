@@ -429,3 +429,7 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Changed
 - Set explicit `search_path = public, auth` for `public.create_profile_for_new_user` function to resolve Supabase linter warning `function_search_path_mutable`. Secures trigger on `auth.users` for creating profiles in `public.profiles` with `Asia/Tokyo` timezone. ([Issue #<TBD>])
 - Set explicit `search_path = public` for `public.update_updated_at_column` function to resolve Supabase linter warning `function_search_path_mutable`. Enhances security by preventing schema manipulation for timestamp updates. ([Issue #<TBD>])
+### Changed
+- Optimized RLS policies on `public.work_logs`, `public.time_sessions`, and `public.profiles` by replacing `auth.uid()` with `(SELECT auth.uid())`, resolving Supabase linter warning `auth_rls_initplan`. Changed `work_logs` policies to `authenticated` role for security. ([Issue #<TBD>])
+- Consolidated `SELECT` policies on `public.questions` into `questions_read_access` for `authenticated` role, resolving Supabase linter warning `multiple_permissive_policies`. ([Issue #<TBD>])
+- Dropped duplicate index `questions_embedding_idx` on `public.questions`, keeping `idx_questions_embedding`, resolving Supabase linter warning `duplicate_index`. ([Issue #<TBD>])
