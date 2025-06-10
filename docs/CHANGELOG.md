@@ -427,9 +427,23 @@ This document tracks changes to the database schema for the NBRCD app.
 - **TodoListPage**: Added a delete button to the task detail modal, reusing the `handleDelete` function for consistency with swipe-to-delete.
 
 ### Changed
-- Set explicit `search_path = public, auth` for `public.create_profile_for_new_user` function to resolve Supabase linter warning `function_search_path_mutable`. Secures trigger on `auth.users` for creating profiles in `public.profiles` with `Asia/Tokyo` timezone. ([Issue #<TBD>])
-- Set explicit `search_path = public` for `public.update_updated_at_column` function to resolve Supabase linter warning `function_search_path_mutable`. Enhances security by preventing schema manipulation for timestamp updates. ([Issue #<TBD>])
+- Set explicit `search_path = public, auth` for `public.create_profile_for_new_user` function to resolve Supabase linter warning `function_search_path_mutable`. Secures trigger on `auth.users` for creating profiles in `public.profiles` with `Asia/Tokyo` timezone. 
+- Set explicit `search_path = public` for `public.update_updated_at_column` function to resolve Supabase linter warning `function_search_path_mutable`. Enhances security by preventing schema manipulation for timestamp updates. 
 ### Changed
-- Optimized RLS policies on `public.work_logs`, `public.time_sessions`, and `public.profiles` by replacing `auth.uid()` with `(SELECT auth.uid())`, resolving Supabase linter warning `auth_rls_initplan`. Changed `work_logs` policies to `authenticated` role for security. ([Issue #<TBD>])
-- Consolidated `SELECT` policies on `public.questions` into `questions_read_access` for `authenticated` role, resolving Supabase linter warning `multiple_permissive_policies`. ([Issue #<TBD>])
-- Dropped duplicate index `questions_embedding_idx` on `public.questions`, keeping `idx_questions_embedding`, resolving Supabase linter warning `duplicate_index`. ([Issue #<TBD>])
+- Optimized RLS policies on `public.work_logs`, `public.time_sessions`, and `public.profiles` by replacing `auth.uid()` with `(SELECT auth.uid())`, resolving Supabase linter warning `auth_rls_initplan`. Changed `work_logs` policies to `authenticated` role for security. 
+- Consolidated `SELECT` policies on `public.questions` into `questions_read_access` for `authenticated` role, resolving Supabase linter warning `multiple_permissive_policies`. 
+- Dropped duplicate index `questions_embedding_idx` on `public.questions`, keeping `idx_questions_embedding`, resolving Supabase linter warning `duplicate_index`. 
+
+### Fixed
+- **User Deletion Error**: Fixed issue where deleting a user caused `Invalid Refresh Token` and other API errors (HTTP 400, 403, 406). Modified `handleDeleteUser` to explicitly sign out and clear Supabase client state before redirecting to `/login`. Optimized `useEffect` to prevent unnecessary API calls after user deletion. Added error boundary to handle unexpected errors gracefully. 
+
+### Added
+- **Error Boundary**: Added `ErrorBoundary` component to catch and display unhandled errors in the Settings page, improving user experience. 
+
+### Fixed
+- **User Deletion TypeScript Error**: Resolved TypeScript error in `handleDeleteUser` where `supabase.auth.setSession(null)` caused a type mismatch. Removed `setSession` call and relied on `supabase.auth.signOut()` to invalidate the session, ensuring proper cleanup and redirect. 
+### Fixed
+- **Settings Page TypeScript Errors**: Resolved syntax error in `showPasswordModal` state declaration causing multiple TypeScript errors (Codes 2448, 2347, 7022, 1005, 1134, 7005). Corrected `useState` declarations with explicit type annotations and fixed import issues to ensure proper type inference. 
+### Fixed
+- **User Deletion 403 Error**: Moved user deletion logic from client-side `supabase.auth.admin.deleteUser` to a server-side API route (`/api/users/delete`) using the `service_role` key to resolve 403 Forbidden errors. Updated `handleDeleteUser` to call the new API route and ensure proper session cleanup. 
+- **406 Not Acceptable Error**: Added error handling for `406` errors in `fetchUserData` when querying the `profiles` table, setting default timezone if query fails. Ensured proper RLS policies for `profiles` table. (#ISSUE_NUMBER)

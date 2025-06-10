@@ -1,5 +1,15 @@
+import { createClient } from '@supabase/supabase-js';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/utils/supabase/server';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,29 +19,36 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const supabase = createClient(req, res);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { userId } = req.body;
 
-  if (!user) {
-    return res.status(401).json({ error: '認証されていません' });
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
   }
 
   try {
-    const { error } = await supabase.auth.admin.deleteUser(user.id);
-    if (error) {
-      throw new Error(error.message || 'ユーザーの削除に失敗しました');
+    // Delete user data from related tables
+    await Promise.all([
+      supabase.from('point_logs').delete().eq('user_id', userId),
+      supabase.from('todos').delete().eq('user_id', userId),
+      supabase.from('sessions').delete().eq('user_id', userId),
+      supabase.from('action_logs').delete().eq('user_id', userId),
+      supabase.from('user_settings').delete().eq('user_id', userId),
+      supabase.from('profiles').delete().eq('user_id', userId),
+    ]);
+
+    // Delete the user from auth
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+    if (authError) {
+      throw new Error(authError.message || 'Failed to delete user');
     }
 
-    await supabase.from('point_logs').delete().eq('user_id', user.id);
-    await supabase.from('todos').delete().eq('user_id', user.id);
-    await supabase.from('sessions').delete().eq('user_id', user.id);
-    await supabase.from('action_logs').delete().eq('user_id', user.id);
-
-    res.status(200).json({ message: 'ユーザーデータが削除されました' });
+    return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Failed to delete user:', error);
-    res.status(500).json({ error: 'ユーザーデータの削除に失敗しました' });
+    console.error('Error deleting user:', error);
+    return res
+      .status(500)
+      .json({
+        error: error instanceof Error ? error.message : 'Internal server error',
+      });
   }
 }
