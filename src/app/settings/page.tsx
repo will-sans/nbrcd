@@ -82,17 +82,19 @@ export default function SettingsPage() {
           setCurrentEmail(data.email);
         }
 
-        const { data: sessionData, error: sessionDataError }: { data: { goal: string | null } | null; error: PostgrestError | null } = await supabase
+        // Query user_session_metadata, handling missing rows
+        const { data: sessionData, error: sessionDataError } = await supabase
           .from("user_session_metadata")
           .select("goal")
           .eq("user_id", user.id)
           .order("updated_at", { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle(); // Use maybeSingle to handle no rows
 
         if (sessionDataError) {
-          if (sessionDataError.code !== "PGRST116") {
-            throw new Error("セッション情報の取得に失敗しました");
+          if (sessionDataError.code !== "PGRST116" && sessionDataError.code !== "406") {
+            console.error("Session metadata error:", sessionDataError);
+            throw new Error(`セッション情報の取得に失敗しました: ${sessionDataError.message}`);
           }
           if (isMounted) {
             setCurrentGoal(null);
@@ -103,14 +105,15 @@ export default function SettingsPage() {
           }
         }
 
-        const { data: profileData, error: profileError }: { data: { timezone: string } | null; error: PostgrestError | null } = await supabase
+        const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("timezone")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle(); // Use maybeSingle for consistency
 
         if (profileError) {
           if (profileError.code !== "PGRST116" && profileError.code !== "406") {
+            console.error("Profile error:", profileError);
             throw new Error(`タイムゾーン情報の取得に失敗しました: ${profileError.message}`);
           }
           if (isMounted) {
@@ -200,10 +203,10 @@ export default function SettingsPage() {
         throw new Error(`ユーザーの削除に失敗しました: ${response.status} ${errorText}`);
       }
 
-      // Sign out to invalidate the session
+      // Attempt to sign out, but ignore errors if no session exists
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) {
-        throw new Error(signOutError.message || "ログアウトに失敗しました");
+        console.warn("Sign out failed, likely no session:", signOutError.message);
       }
 
       // Clear local storage
@@ -218,6 +221,7 @@ export default function SettingsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
+      console.error("Delete user error:", err);
     }
   };
 

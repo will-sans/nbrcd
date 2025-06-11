@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -14,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const supabase = getSupabaseClient();
 
@@ -47,13 +47,16 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setLoading(true);
 
     if (!email) {
       setError("メールアドレスを入力してください");
+      setLoading(false);
       return;
     }
     if (!password || password.length < 6) {
       setError("パスワードは6文字以上で入力してください");
+      setLoading(false);
       return;
     }
 
@@ -87,6 +90,8 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
       setSuccess(null);
       console.error("Login error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,17 +99,21 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setLoading(true);
 
     if (!username || username.length < 3) {
       setError("ユーザー名は3文字以上で入力してください");
+      setLoading(false);
       return;
     }
     if (!email) {
       setError("メールアドレスを入力してください");
+      setLoading(false);
       return;
     }
     if (!password || password.length < 6) {
       setError("パスワードは6文字以上で入力してください");
+      setLoading(false);
       return;
     }
 
@@ -120,46 +129,51 @@ export default function LoginPage() {
       if (authError) {
         if (authError.message.includes('User already registered')) {
           setError('このメールアドレスはすでに登録されています');
-          return;
+        } else {
+          setError(authError.message || 'ユーザー登録に失敗しました');
         }
-        throw new Error(authError.message || 'ユーザー登録に失敗しました');
+        throw authError;
       }
 
       if (!data.user) {
         throw new Error('ユーザー登録に失敗しました');
       }
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error('セッションの取得に失敗しました');
+      console.log("Registration successful, user:", data.user);
+
+      // Call server-side API to insert user settings
+      const response = await fetch('/api/users/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: data.user.id,
+          username,
+          email,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`ユーザー設定の初期化に失敗しました: ${response.status} ${errorText}`);
       }
 
-      console.log("Registration successful, session:", session);
-
-      const { error: settingsError } = await supabase
-        .from('user_settings')
-        .insert({
-          user_id: data.user.id,
-          last_question_ids: {},
-          last_login_date: new Date().toDateString(),
-          login_streak: 1,
-          last_point_added_date: new Date().toDateString(),
-        });
-
-      if (settingsError) {
-        console.error("Failed to initialize user settings:", settingsError);
-      }
-
-      setSuccess("ユーザー登録が完了しました！");
+      setSuccess("ユーザー登録が完了しました！メールを確認してアカウントを有効化してください。");
       setError(null);
       setUsername("");
       setEmail("");
       setPassword("");
-      router.push("/");
+      // Optionally redirect to a verification page
+      // router.push("/verify-email");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      if (!error) {
+        setError(err instanceof Error ? err.message : "エラーが発生しました");
+      }
       setSuccess(null);
       console.error("Registration error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -234,10 +248,13 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
-            className="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-sm"
+            disabled={loading}
+            className={`w-full px-4 py-2 rounded-lg text-sm ${
+              loading ? 'bg-gray-400 text-gray-700' : 'bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700'
+            }`}
             aria-label={mode === 'login' ? 'ログイン' : '新規登録'}
           >
-            {mode === 'login' ? 'ログイン' : '登録'}
+            {loading ? '処理中...' : mode === 'login' ? 'ログイン' : '登録'}
           </button>
         </form>
       </div>

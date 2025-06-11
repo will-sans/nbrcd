@@ -1,5 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/utils/supabase/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,61 +19,63 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { username, email, password } = req.body;
-  console.log('Received body:', { username, email });
+  const { userId, username, email } = req.body;
 
-  if (!username || username.length < 3) {
+  if (!userId || !username || !email) {
     return res
       .status(400)
-      .json({ error: 'ユーザー名は3文字以上で入力してください' });
-  }
-  if (!email) {
-    return res.status(400).json({ error: 'メールアドレスを入力してください' });
-  }
-  if (!password || password.length < 6) {
-    return res
-      .status(400)
-      .json({ error: 'パスワードは6文字以上で入力してください' });
+      .json({ error: 'User ID, username, and email are required' });
   }
 
   try {
-    const supabase = createClient(req, res);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { username },
-      },
-    });
+    // Insert user settings
+    const { error: settingsError } = await supabase
+      .from('user_settings')
+      .insert({
+        user_id: userId,
+        last_question_ids: {},
+        last_login_date: new Date().toDateString(),
+        login_streak: 1,
+        last_point_added_date: new Date().toDateString(),
+      });
 
-    if (error) {
-      if (error.message.includes('User already registered')) {
-        return res
-          .status(409)
-          .json({ error: 'このメールアドレスはすでに登録されています' });
-      }
-      throw new Error(error.message || 'ユーザー登録に失敗しました');
+    if (settingsError) {
+      throw new Error(
+        `Failed to initialize user settings: ${settingsError.message}`
+      );
     }
 
-    if (!data.user) {
-      throw new Error('ユーザー登録に失敗しました');
+    // Insert initial user session metadata
+    const { error: metadataError } = await supabase
+      .from('user_session_metadata')
+      .insert({
+        user_id: userId,
+        session_id: `initial-${Date.now()}`,
+        summary: '',
+        user_inputs: [],
+        selected_action: null,
+        updated_at: new Date().toISOString(),
+        goal: null,
+      });
+
+    if (metadataError) {
+      throw new Error(
+        `Failed to initialize user session metadata: ${metadataError.message}`
+      );
     }
 
-    res.status(200).json({
-      id: data.user.id,
+    return res.status(200).json({
+      id: userId,
       username,
-      email: data.user.email,
+      email,
+      message: 'User registered successfully',
     });
   } catch (error) {
     console.error('Failed to register user:', error);
-    if (error instanceof Error) {
-      return res
-        .status(500)
-        .json({ error: 'ユーザー登録に失敗しました', details: error.message });
-    }
     return res.status(500).json({
       error: 'ユーザー登録に失敗しました',
-      details: '不明なエラーが発生しました',
+      details:
+        error instanceof Error ? error.message : '不明なエラーが発生しました',
     });
   }
 }

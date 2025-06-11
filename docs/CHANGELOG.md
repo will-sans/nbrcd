@@ -446,4 +446,20 @@ This document tracks changes to the database schema for the NBRCD app.
 - **Settings Page TypeScript Errors**: Resolved syntax error in `showPasswordModal` state declaration causing multiple TypeScript errors (Codes 2448, 2347, 7022, 1005, 1134, 7005). Corrected `useState` declarations with explicit type annotations and fixed import issues to ensure proper type inference. 
 ### Fixed
 - **User Deletion 403 Error**: Moved user deletion logic from client-side `supabase.auth.admin.deleteUser` to a server-side API route (`/api/users/delete`) using the `service_role` key to resolve 403 Forbidden errors. Updated `handleDeleteUser` to call the new API route and ensure proper session cleanup. 
-- **406 Not Acceptable Error**: Added error handling for `406` errors in `fetchUserData` when querying the `profiles` table, setting default timezone if query fails. Ensured proper RLS policies for `profiles` table. (#ISSUE_NUMBER)
+- **406 Not Acceptable Error**: Added error handling for `406` errors in `fetchUserData` when querying the `profiles` table, setting default timezone if query fails. Ensured proper RLS policies for `profiles` table. 
+(#ISSUE_NUMBER:8ccc3c8 (HEAD -> fix/delete_user_error, origin/fix/delete_user_error) delete user error resolved.)
+
+## 2025-06-11
+### Fixed
+- **User Registration 500 Error**: Resolved `Database error saving new user` by granting `USAGE` on the `public` schema and `INSERT` on `profiles` and `user_settings` tables to the `authenticator` role. Verified `create_profile_for_new_user` trigger setup. Removed redundant `pages/api/users/register.ts` and enhanced error handling in `app/login/page.tsx`. 
+(#ISSUE_NUMBER)
+
+### Fixed
+- **Registration Session Error**: Resolved セッションの取得に失敗しました error during user registration by removing unnecessary supabase.auth.getSession() call in handleRegister when email confirmation is enabled. Updated app/login/page.tsx to inform users to verify their email and added loading state for better UX. (#ISSUE_NUMBER)
+
+### Fixed
+- **Registration RLS Error**: Resolved `401 Unauthorized` and `42501` errors during `user_settings` insertion by moving it to a server-side API route (`/api/users/register`) using the `service_role` key. Updated RLS policies for `user_settings` and `user_session_metadata` to allow `authenticator` inserts and selects. (#ISSUE_NUMBER)
+- **Deletion Sign-Out Error**: Handled `403 Forbidden` error during `signOut` in `handleDeleteUser` by ignoring failures when no session exists. (#ISSUE_NUMBER)
+- **User Session Metadata 406 Error**: Added handling for `406 Not Acceptable` errors in `fetchUserData` for `user_session_metadata` queries, setting default values on failure. (#ISSUE_NUMBER)
+- **Settings Page 406 Error**: Resolved 406 Not Acceptable error when querying user_session_metadata by correcting RLS policy syntax to use USING instead of WITH CHECK for SELECT. Added initial user_session_metadata row creation in /api/users/register.ts and updated fetchUserData to use maybeSingle for robust handling of missing rows. (#ISSUE_NUMBER)
+
