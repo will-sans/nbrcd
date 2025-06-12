@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { useTimezone } from "@/lib/timezone-context";
 import { FaArrowLeft, FaBars } from "react-icons/fa";
-import { PostgrestError } from "@supabase/supabase-js";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 const availableTimezones = [
@@ -89,7 +87,7 @@ export default function SettingsPage() {
           .eq("user_id", user.id)
           .order("updated_at", { ascending: false })
           .limit(1)
-          .maybeSingle(); // Use maybeSingle to handle no rows
+          .maybeSingle();
 
         if (sessionDataError) {
           if (sessionDataError.code !== "PGRST116" && sessionDataError.code !== "406") {
@@ -109,7 +107,7 @@ export default function SettingsPage() {
           .from("profiles")
           .select("timezone")
           .eq("user_id", user.id)
-          .maybeSingle(); // Use maybeSingle for consistency
+          .maybeSingle();
 
         if (profileError) {
           if (profileError.code !== "PGRST116" && profileError.code !== "406") {
@@ -200,6 +198,9 @@ export default function SettingsPage() {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 405) {
+          throw new Error("サーバーがこの操作をサポートしていません。管理者に連絡してください。");
+        }
         throw new Error(`ユーザーの削除に失敗しました: ${response.status} ${errorText}`);
       }
 
@@ -219,7 +220,8 @@ export default function SettingsPage() {
       setError(null);
       router.push("/login");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      const errorMessage = err instanceof Error ? err.message : "エラーが発生しました";
+      setError(errorMessage);
       setSuccess(null);
       console.error("Delete user error:", err);
     }
@@ -350,16 +352,16 @@ export default function SettingsPage() {
         throw new Error("セッションの取得に失敗しました");
       }
 
-      const { data: currentMetadata, error: fetchError }: { data: { summary: string; user_inputs: string[]; selected_action: string | null } | null; error: PostgrestError | null } = await supabase
+      const { data: currentMetadata, error: fetchError } = await supabase
         .from("user_session_metadata")
         .select("summary, user_inputs, selected_action")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (fetchError && fetchError.code !== "PGRST116") {
-        throw new Error("現在のメタデータの取得に失敗しました");
+        throw new Error(`現在のメタデータの取得に失敗しました: ${fetchError.message}`);
       }
 
       const { error: upsertError } = await supabase
@@ -402,7 +404,7 @@ export default function SettingsPage() {
         throw new Error("ユーザーIDが見つかりません");
       }
 
-      const { error }: { error: PostgrestError | null } = await supabase
+      const { error } = await supabase
         .from("profiles")
         .upsert(
           { user_id: user.id, timezone: newTimezone, updated_at: new Date().toISOString() },
