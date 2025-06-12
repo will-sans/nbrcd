@@ -465,4 +465,5 @@ This document tracks changes to the database schema for the NBRCD app.
 
 ## 2025-06-12
 ### Fixed
-- **Production User Deletion 405 Error**: Resolved 405 Method Not Allowed error for /api/users/delete in production by adding the missing SUPABASE_SERVICE_ROLE_KEY to Vercel’s environment variables for all environments. Redeployed the application to ensure the API route functions correctly. (#ISSUE_NUMBER)
+- **Production User Deletion 405 Error**: Resolved 405 Method Not Allowed error for /api/users/delete in production by adding the missing SUPABASE_SERVICE_ROLE_KEY to Vercel’s environment variables for all environments. Redeployed the application to ensure the API route functions correctly. (#239dc28)
+
