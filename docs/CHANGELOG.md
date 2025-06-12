@@ -463,3 +463,6 @@ This document tracks changes to the database schema for the NBRCD app.
 - **User Session Metadata 406 Error**: Added handling for `406 Not Acceptable` errors in `fetchUserData` for `user_session_metadata` queries, setting default values on failure. (#ISSUE_NUMBER)
 - **Settings Page 406 Error**: Resolved 406 Not Acceptable error when querying user_session_metadata by correcting RLS policy syntax to use USING instead of WITH CHECK for SELECT. Added initial user_session_metadata row creation in /api/users/register.ts and updated fetchUserData to use maybeSingle for robust handling of missing rows. (#ISSUE_NUMBER)
 
+## 2025-06-12
+### Fixed
+- **Production User Deletion 405 Error**: Resolved 405 Method Not Allowed error for /api/users/delete in production by adding the missing SUPABASE_SERVICE_ROLE_KEY to Vercel’s environment variables for all environments. Redeployed the application to ensure the API route functions correctly. (#ISSUE_NUMBER)
