@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -55,7 +54,7 @@ export default function DiaryPage() {
           .single();
 
         if (error) {
-          console.error("Error fetching work log:", error);
+          console.error("Error fetching work log:", error.message, error.details);
           setErrorMessage("日報の取得に失敗しました");
           return;
         }
@@ -83,41 +82,40 @@ export default function DiaryPage() {
             .select("id")
             .eq("todo_id", todoId)
             .eq("user_id", user.id)
-            .single();
+            .limit(1);
 
           if (logError && logError.code !== "PGRST116") {
-            console.error("Error checking existing log:", logError);
+            console.error("Error checking existing log:", logError.message, logError.details);
             setErrorMessage("既存の日報確認に失敗しました");
             return;
           }
 
-          if (existingLog) {
+          if (existingLog && existingLog.length > 0) {
             alert("このタスクの日報はすでに登録されています");
             router.push("/todo/completed");
             return;
           }
 
-          const { data: session, error: sessionError } = await supabase
+          const { data: sessions, error: sessionError } = await supabase
             .from("time_sessions")
             .select("start_time, end_time")
             .eq("todo_id", todoId)
             .eq("user_id", user.id)
             .order("start_time", { ascending: false })
-            .limit(1)
-            .single();
+            .limit(1);
 
           if (sessionError && sessionError.code !== "PGRST116") {
-            console.error("Error fetching time session:", sessionError);
+            console.error("Error fetching time session:", sessionError.message, sessionError.details);
             setErrorMessage("時間データの取得に失敗しました");
             return;
           }
 
-          if (session && session.start_time && session.end_time) {
-            timeAllocation = `${new Date(session.start_time).toLocaleTimeString("ja-JP", {
+          if (sessions && sessions.length > 0 && sessions[0].start_time && sessions[0].end_time) {
+            timeAllocation = `${new Date(sessions[0].start_time).toLocaleTimeString("ja-JP", {
               hour: "2-digit",
               minute: "2-digit",
               timeZone: "Asia/Tokyo",
-            })}–${new Date(session.end_time).toLocaleTimeString("ja-JP", {
+            })}–${new Date(sessions[0].end_time).toLocaleTimeString("ja-JP", {
               hour: "2-digit",
               minute: "2-digit",
               timeZone: "Asia/Tokyo",

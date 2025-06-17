@@ -32,6 +32,7 @@ export default function CompletedTodoPage() {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [exitingTodos, setExitingTodos] = useState<Map<string, "restore" | "delete">>(new Map());
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
 
   useEffect(() => {
     const fetchCompletedTodos = async () => {
@@ -181,8 +182,16 @@ export default function CompletedTodoPage() {
     }
   };
 
-  const handleRowClick = (todo: Todo) => {
+  const handleLogToDiary = (todo: Todo) => {
     router.push(`/diary?todo_id=${todo.id}&task_content=${encodeURIComponent(todo.text)}&completed_date=${encodeURIComponent(todo.completed_date || "")}`);
+  };
+
+  const handleRowClick = (todo: Todo) => {
+    setSelectedTodo(todo);
+  };
+
+  const closeModal = () => {
+    setSelectedTodo(null);
   };
 
   const onTransitionEnd = (id: string) => {
@@ -296,13 +305,6 @@ export default function CompletedTodoPage() {
                           onTouchMove={(e) => handleTouchMove(todo.id, e)}
                           onTouchEnd={() => handleTouchEnd(todo.id)}
                         >
-                          <input
-                            type="checkbox"
-                            checked={true}
-                            onChange={() => handleRestoreTodo(todo.id)}
-                            className="mr-2 dark:accent-gray-600"
-                            disabled={loggedTodoIds.has(todo.id)}
-                          />
                           <div className="flex-1">
                             <span className="line-through text-sm dark:text-gray-300">{todo.text}</span>
                             <p className="text-xs text-gray-500 dark:text-gray-500">
@@ -338,6 +340,49 @@ export default function CompletedTodoPage() {
             <p className="text-gray-500 text-center text-sm dark:text-gray-500">完了: 0 タスク</p>
           )}
         </>
+      )}
+
+      {selectedTodo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">{selectedTodo.text}</h2>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  handleRestoreTodo(selectedTodo.id);
+                  closeModal();
+                }}
+                className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+              >
+                未完了にする
+              </button>
+              <button
+                onClick={() => {
+                  handleLogToDiary(selectedTodo);
+                  closeModal();
+                }}
+                className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
+              >
+                日報入力する
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteTodo(selectedTodo.id);
+                  closeModal();
+                }}
+                className="w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+              >
+                削除する
+              </button>
+              <button
+                onClick={closeModal}
+                className="w-full bg-gray-300 text-black py-2 rounded-lg hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-700"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

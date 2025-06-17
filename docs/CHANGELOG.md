@@ -473,4 +473,22 @@ This document tracks changes to the database schema for the NBRCD app.
 - **User Deletion Success Message**: Fixed missing success message by refactoring `handleDeleteUser` in `app/settings/page.tsx` to use state-driven UI for displaying “ユーザーデータが削除されました” before redirecting. Removed redundant `supabase.auth.signOut()` call to avoid `403 Forbidden` errors. Silenced `Auth session missing` errors in `app/login/page.tsx` and enhanced logging in `/api/users/delete`. (#bc3e705s)
 
 ### Changed
-- Modified `startTimeTracking` in `TodoListPage` to insert into `time_sessions` table instead of `time_tracking` and navigate to `/time-tracker` after starting a session. This fixes the issue where clicking "時間計測を開始" in the task modal did not start tracking or open the `TimeTrackerPage`.(#)
+- Modified `startTimeTracking` in `TodoListPage` to insert into `time_sessions` table instead of `time_tracking` and navigate to `/time-tracker` after starting a session. This fixes the issue where clicking "時間計測を開始" in the task modal did not start tracking or open the `TimeTrackerPage`.(#3e73094)
+
+- **CompletedTodoPage (`app/todo/completed/page.tsx`)**:
+  - Removed checkbox input and its associated `handleRestoreTodo` event to prevent overlapping click events.
+  - Disabled direct navigation to diary page on row click, replacing it with a modal trigger.
+  - Added a modal that appears on row click, offering options to mark as incomplete, log to diary, or delete the task.
+  - Updated swipe gesture handling to align with modal-based interaction.
+  - Maintained existing functionality for deleting tasks via swipe gesture.
+  - Added new state `selectedTodo` to manage modal visibility and actions.
+  - Implemented `handleLogToDiary` to navigate to the diary page from the modal.
+  - Updated UI to reflect the removal of the checkbox and new modal interaction.(#)
+
+### Fixed
+- **DiaryPage (`app/diary/page.tsx`)**:
+  - Fixed 406 (Not Acceptable) errors when querying `work_logs` and `time_sessions` tables from the diary page.
+  - Replaced `.single()` with `.limit(1)` for `work_logs` and `time_sessions` queries to handle cases where no rows exist more robustly.
+  - Added detailed error logging for Supabase query failures to aid debugging.
+  - Ensured `time_allocation` is set to an empty string when no `time_sessions` data is found, supporting tasks completed without time-tracking.
+  - Improved error handling to catch unexpected errors (e.g., 406) and display user-friendly messages.
