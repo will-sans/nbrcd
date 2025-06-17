@@ -470,4 +470,7 @@ This document tracks changes to the database schema for the NBRCD app.
 ## 2025-06-17
 
 ### Fixed
-- **User Deletion Success Message**: Fixed missing success message by refactoring `handleDeleteUser` in `app/settings/page.tsx` to use state-driven UI for displaying “ユーザーデータが削除されました” before redirecting. Removed redundant `supabase.auth.signOut()` call to avoid `403 Forbidden` errors. Silenced `Auth session missing` errors in `app/login/page.tsx` and enhanced logging in `/api/users/delete`. (#ISSUE_NUMBER)
+- **User Deletion Success Message**: Fixed missing success message by refactoring `handleDeleteUser` in `app/settings/page.tsx` to use state-driven UI for displaying “ユーザーデータが削除されました” before redirecting. Removed redundant `supabase.auth.signOut()` call to avoid `403 Forbidden` errors. Silenced `Auth session missing` errors in `app/login/page.tsx` and enhanced logging in `/api/users/delete`. (#bc3e705s)
+
+### Changed
+- Modified `startTimeTracking` in `TodoListPage` to insert into `time_sessions` table instead of `time_tracking` and navigate to `/time-tracker` after starting a session. This fixes the issue where clicking "時間計測を開始" in the task modal did not start tracking or open the `TimeTrackerPage`.(#)

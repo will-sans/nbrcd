@@ -269,26 +269,36 @@ export default function TodoListPage() {
       return;
     }
 
+    const todo = todos.find((t) => t.id === taskId);
+    if (!todo) {
+      console.error("Todo not found for taskId:", taskId);
+      return;
+    }
+
+    const session = {
+      id: uuidv4(),
+      user_id: user.id,
+      task: todo.text,
+      category: "タスク",
+      start_time: new Date().toISOString(),
+      todo_id: taskId,
+    };
+
     try {
       const { error } = await supabase
-        .from("time_tracking")
-        .insert({
-          id: uuidv4(),
-          task_id: taskId,
-          user_id: user.id,
-          start_time: new Date().toISOString(),
-        });
+        .from("time_sessions")
+        .insert(session);
 
       if (error) {
         throw new Error(error.message || "時間計測の開始に失敗しました");
       }
 
       console.log(`Time tracking started for task ${taskId}`);
+      router.push("/time-tracker"); // Navigate to TimeTrackerPage
     } catch (err) {
       console.error("Failed to start time tracking:", err);
     }
   };
-
   const handleTouchStart = (id: string, e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
     setTouchStart((prev) => ({ ...prev, [id]: touch.clientX }));
