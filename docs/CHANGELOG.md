@@ -492,7 +492,32 @@ This document tracks changes to the database schema for the NBRCD app.
   - Added detailed error logging for Supabase query failures to aid debugging.
   - Ensured `time_allocation` is set to an empty string when no `time_sessions` data is found, supporting tasks completed without time-tracking.
   - Improved error handling to catch unexpected errors (e.g., 406) and display user-friendly messages.(#6cf550b)
+### Changed
+- Fixed `function_search_path_mutable` warning for `public.create_profile_for_new_user` by adding `SET search_path = public` to the function definition. ([Supabase Linter: 0011_function_search_path_mutable])(#a10f953)
+### Fixed
+- Corrected pagination issue in Learning Search page where clicking "もっと見る" (Load More) button caused duplicate display of initial 10 questions. Modified `debouncedLoadMore` to ensure `fetchQuestions` is called after page state update.
+- Fixed ESLint `react/no-unescaped-entities` error in `app/learning-search/page.tsx` by removing unescaped quotation marks around `q.quote` in JSX rendering.
+- Fixed persistent pagination issue by passing explicit `currentPage` parameter to `fetchQuestions` to ensure correct range is queried, and added debug logs to verify query range and fetched IDs.
+- Resolved TypeScript errors in `app/learning-search/page.tsx`:
+  - Fixed `setPage` type error by removing unused `page` state and managing pagination with local `newPage` variable in `debouncedLoadMore`.
+  - Addressed `@typescript-eslint/no-unused-vars` error by removing unused `page` state.
+  - Fixed `react-hooks/exhaustive-deps` warning by including `setFetchedCount` in `useEffect` dependency array.
+(#)
+### Changed
+- Replaced "もっと見る" (Load More) button in Learning Search page with Google Search-style pagination UI, featuring page numbers, "前へ" (Previous), and "次へ" (Next) buttons for explicit page navigation.
+- Reverted Supabase query from `.offset().limit()` to `.range()` in `fetchQuestions` to align with Supabase API.
+- Removed cache-busting parameter (`nocache`) to simplify query for debugging.
 
-  ### Changed
-- Fixed `function_search_path_mutable` warning for `public.create_profile_for_new_user` by adding `SET search_path = public` to the function definition. ([Supabase Linter: 0011_function_search_path_mutable])
-
+### Fixed
+- Corrected pagination issue in Learning Search page where clicking "もっと見る" caused duplicate display of initial 10 questions. Modified `debouncedLoadMore` to ensure `fetchQuestions` is called after page state update.
+- Fixed ESLint `react/no-unescaped-entities` error in `app/learning-search/page.tsx` by removing unescaped quotation marks around `q.quote` in JSX rendering.
+- Fixed persistent pagination issue by passing explicit `currentPage` parameter to `fetchQuestions` and adding debug logs to verify query range and fetched IDs.
+- Resolved TypeScript errors in `app/learning-search/page.tsx`:
+  - Fixed `setPage` type error by removing unused `page` state and managing pagination with local `newPage` variable in `debouncedLoadMore`.
+  - Addressed `@typescript-eslint/no-unused-vars` error by removing unused `page` state.
+  - Fixed `react-hooks/exhaustive-deps` warning by including `setFetchedCount` in `useEffect` dependency array.
+- Simplified pagination logic by removing `fetchedCount` and `hasMore` states, relying on `totalCount` and `currentPage` for page-based navigation.
+- Fixed TypeScript error (TS7006) in `app/learning-search/page.tsx` by explicitly typing `item` as `VectorSearchResult` in the `map` callback for vector search results.
+- Fixed TypeScript errors (TS2339, TS2345) in `app/learning-search/page.tsx`:
+  - Reverted `.offset().limit()` to `.range()` to fix `Property 'offset' does not exist` error.
+  - Corrected `setCharts` typo to `setChapter` in `<select>` handlers to fix type mismatch errors.

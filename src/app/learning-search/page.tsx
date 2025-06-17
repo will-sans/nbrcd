@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaSearch, FaSpinner, FaArrowLeft } from "react-icons/fa";
 import { philosophers } from "@/data/philosophers";
-import { debounce } from "lodash";
+import { PostgrestError } from "@supabase/supabase-js";
 
 interface Question {
   id: string;
@@ -52,10 +52,8 @@ export default function LearningSearch() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number | null>(null);
-  const [fetchedCount, setFetchedCount] = useState(0);
   const [useVectorSearch, setUseVectorSearch] = useState(false);
 
   const [books, setBooks] = useState<string[]>([]);
@@ -126,23 +124,32 @@ export default function LearningSearch() {
       if (error) throw error;
 
       setTotalCount(count);
-      setHasMore(count ? count > fetchedCount : false);
-      console.log("Total count:", count, "fetchedCount:", fetchedCount, "hasMore:", count ? count > fetchedCount : false);
+      console.log("Total count:", count);
+
+      // Debug: Log total mikitani records
+      if (author === "mikitani") {
+        const { count: mikitaniCount } = await supabase
+          .from("questions")
+          .select("id", { count: "exact", head: true })
+          .eq("philosophy", "mikitani");
+        console.log("Mikitani total count:", mikitaniCount);
+      }
     } catch {
       setError("総件数の取得に失敗しました。");
     }
-  }, [supabase, author, book, chapter, category, searchTerm, fetchedCount]);
+  }, [supabase, author, book, chapter, category, searchTerm]);
 
   // Fetch questions based on filters
   const fetchQuestions = useCallback(
-    async (reset = false) => {
+    async () => {
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
 
       setIsLoading(true);
       setError(null);
 
-      console.log("Fetching questions: page=", page, "reset=", reset, "filters=", { author, book, chapter, category, searchTerm });
+      console.log("Fetching questions: page=", currentPage, "filters=", { author, book, chapter, category, searchTerm });
+      console.log("Query range:", (currentPage - 1) * itemsPerPage, "to", currentPage * itemsPerPage - 1);
 
       try {
         if (useVectorSearch && searchTerm) {
@@ -152,7 +159,7 @@ export default function LearningSearch() {
               query_embedding: embedding,
               match_count: itemsPerPage,
               threshold: 0.8,
-            });
+            }) as { data: VectorSearchResult[], error: PostgrestError | null };
 
           if (error) throw error;
 
@@ -171,15 +178,13 @@ export default function LearningSearch() {
             call_to_action: item.quote,
           }));
 
-          setQuestions(reset ? mappedData : [...questions, ...mappedData]);
-          setFetchedCount(reset ? mappedData.length : fetchedCount + mappedData.length);
-          setHasMore(totalCount ? totalCount > (reset ? mappedData.length : fetchedCount + mappedData.length) : data.length === itemsPerPage);
-          console.log("Vector fetched:", mappedData.length, "fetchedCount:", reset ? mappedData.length : fetchedCount + mappedData.length, "hasMore:", totalCount ? totalCount > (reset ? mappedData.length : fetchedCount + mappedData.length) : data.length === itemsPerPage);
+          setQuestions(mappedData);
+          console.log("Vector fetched:", mappedData.length, "IDs:", mappedData.map((item) => item.id));
         } else {
           let query = supabase
             .from("questions")
             .select("*")
-            .range((page - 1) * itemsPerPage, page * itemsPerPage - 1)
+            .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1)
             .order("id", { ascending: true });
 
           if (author) query = query.eq("philosophy", author);
@@ -188,16 +193,30 @@ export default function LearningSearch() {
           if (category) query = query.eq("category", category);
           if (searchTerm) query = query.ilike("question", `%${searchTerm}%`);
 
+          // Log query parameters
+          const queryParams = {
+            range: `${(currentPage - 1) * itemsPerPage}-${currentPage * itemsPerPage - 1}`,
+            order: "id.asc",
+            philosophy: author || undefined,
+            book: book || undefined,
+            chapter: chapter || undefined,
+            category: category || undefined,
+            question: searchTerm ? `ilike.%${searchTerm}%` : undefined,
+          };
+          console.log("Query parameters:", queryParams);
+
           const { data, error } = await query;
 
           if (error) throw error;
 
-          setQuestions(reset ? data : [...questions, ...data]);
-          setFetchedCount(reset ? data.length : fetchedCount + data.length);
-          setHasMore(totalCount ? totalCount > (reset ? data.length : fetchedCount + data.length) : data.length === itemsPerPage);
-          console.log("Keyword fetched:", data.length, "fetchedCount:", reset ? data.length : fetchedCount + data.length, "hasMore:", totalCount ? totalCount > (reset ? data.length : fetchedCount + data.length) : data.length === itemsPerPage);
+          console.log("Fetched data IDs:", data.map((item: Question) => item.id));
+          console.log("Fetched questions:", data.map((item: Question) => item.question));
+          console.log("Query response length:", data.length);
+
+          setQuestions(data);
         }
-      } catch {
+      } catch (err) {
+        console.error("Fetch error:", err);
         setError("質問の取得に失敗しました。");
       } finally {
         setTimeout(() => {
@@ -206,7 +225,7 @@ export default function LearningSearch() {
         }, 100);
       }
     },
-    [author, book, chapter, category, searchTerm, useVectorSearch, supabase, page, totalCount, fetchedCount, questions]
+    [author, book, chapter, category, searchTerm, useVectorSearch, supabase, currentPage]
   );
 
   useEffect(() => {
@@ -215,26 +234,34 @@ export default function LearningSearch() {
   }, [fetchFilterOptions, fetchTotalCount]);
 
   useEffect(() => {
-    setPage(1);
-    setFetchedCount(0);
-    fetchQuestions(true);
+    setCurrentPage(1);
+    fetchQuestions();
   }, [author, book, chapter, category, searchTerm, useVectorSearch, fetchQuestions]);
 
-  const debouncedLoadMore = debounce(() => {
-    if (isFetchingRef.current || !hasMore) return;
-    setPage((prev) => {
-      const newPage = prev + 1;
-      console.log("Loading more: newPage=", newPage, "fetchedCount=", fetchedCount, "totalCount=", totalCount);
-      return newPage;
-    });
-    fetchQuestions(false);
-  }, 300);
+  useEffect(() => {
+    fetchQuestions();
+  }, [currentPage, fetchQuestions]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    setFetchedCount(0);
-    fetchQuestions(true);
+    setCurrentPage(1);
+    fetchQuestions();
+  };
+
+  // Calculate total pages
+  const totalPages = totalCount ? Math.ceil(totalCount / itemsPerPage) : 1;
+
+  // Generate page numbers to display (e.g., 1, 2, 3, ..., 10)
+  const getPageNumbers = () => {
+    const maxPagesToShow = 10;
+    const pages = [];
+    const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
   };
 
   return (
@@ -365,7 +392,7 @@ export default function LearningSearch() {
               {q.learning && <p className="text-xs mt-1 dark:text-gray-300">{q.learning}</p>}
               {q.quote && (
                 <p className="text-xs italic mt-1 dark:text-gray-300">
-                  &quot;{q.quote}&quot;
+                  {q.quote}
                 </p>
               )}
               {q.similarity && (
@@ -375,18 +402,46 @@ export default function LearningSearch() {
               )}
             </div>
           ))}
-          {hasMore && (
-            <button
-              onClick={debouncedLoadMore}
-              className="w-full p-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors text-sm dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-100"
-              disabled={isLoading || !hasMore}
-            >
-              {isLoading ? (
-                <FaSpinner className="animate-spin mx-auto dark:text-gray-100" />
-              ) : (
-                "もっと見る"
-              )}
-            </button>
+          {totalCount !== null && totalCount > itemsPerPage && (
+            <div className="flex justify-center mt-6">
+              <nav className="flex items-center space-x-2">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1 text-sm rounded-lg ${
+                    currentPage === 1
+                      ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400"
+                      : "bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+                  }`}
+                >
+                  前へ
+                </button>
+                {getPageNumbers().map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 text-sm rounded-lg ${
+                      currentPage === page
+                        ? "bg-blue-500 text-white dark:bg-blue-600"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1 text-sm rounded-lg ${
+                    currentPage === totalPages
+                      ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400"
+                      : "bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
+                  }`}
+                >
+                  次へ
+                </button>
+              </nav>
+            </div>
           )}
         </div>
       )}
