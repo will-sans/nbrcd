@@ -483,7 +483,7 @@ This document tracks changes to the database schema for the NBRCD app.
   - Maintained existing functionality for deleting tasks via swipe gesture.
   - Added new state `selectedTodo` to manage modal visibility and actions.
   - Implemented `handleLogToDiary` to navigate to the diary page from the modal.
-  - Updated UI to reflect the removal of the checkbox and new modal interaction.(#)
+  - Updated UI to reflect the removal of the checkbox and new modal interaction.
 
 ### Fixed
 - **DiaryPage (`app/diary/page.tsx`)**:
@@ -491,4 +491,8 @@ This document tracks changes to the database schema for the NBRCD app.
   - Replaced `.single()` with `.limit(1)` for `work_logs` and `time_sessions` queries to handle cases where no rows exist more robustly.
   - Added detailed error logging for Supabase query failures to aid debugging.
   - Ensured `time_allocation` is set to an empty string when no `time_sessions` data is found, supporting tasks completed without time-tracking.
-  - Improved error handling to catch unexpected errors (e.g., 406) and display user-friendly messages.
+  - Improved error handling to catch unexpected errors (e.g., 406) and display user-friendly messages.(#6cf550b)
+
+  ### Changed
+- Fixed `function_search_path_mutable` warning for `public.create_profile_for_new_user` by adding `SET search_path = public` to the function definition. ([Supabase Linter: 0011_function_search_path_mutable])
+
