@@ -467,3 +467,7 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Fixed
 - **Production User Deletion 405 Error**: Resolved 405 Method Not Allowed error for /api/users/delete in production by adding the missing SUPABASE_SERVICE_ROLE_KEY to Vercel’s environment variables for all environments. Redeployed the application to ensure the API route functions correctly. (#239dc28)
 
+## 2025-06-17
+
+### Fixed
+- **User Deletion Success Message**: Fixed missing success message by refactoring `handleDeleteUser` in `app/settings/page.tsx` to use state-driven UI for displaying “ユーザーデータが削除されました” before redirecting. Removed redundant `supabase.auth.signOut()` call to avoid `403 Forbidden` errors. Silenced `Auth session missing` errors in `app/login/page.tsx` and enhanced logging in `/api/users/delete`. (#ISSUE_NUMBER)

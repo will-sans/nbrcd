@@ -1,8 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error('Missing environment variables:', {
+    supabaseUrl,
+    serviceRoleKey,
+  });
+  throw new Error('Server configuration error');
+}
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
@@ -15,6 +23,12 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  console.log('Delete request received:', {
+    method: req.method,
+    userId: req.body.userId,
+    timestamp: new Date().toISOString(),
+  });
+
   if (req.method !== 'DELETE') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -42,13 +56,17 @@ export default async function handler(
       throw new Error(authError.message || 'Failed to delete user');
     }
 
+    console.log('User deleted successfully:', { userId });
+
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    return res
-      .status(500)
-      .json({
-        error: error instanceof Error ? error.message : 'Internal server error',
-      });
+    console.error('Error deleting user:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      userId,
+      timestamp: new Date().toISOString(),
+    });
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Internal server error',
+    });
   }
 }

@@ -18,31 +18,49 @@ export default function LoginPage() {
   const supabase = getSupabaseClient();
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkUser = async () => {
+      if (!isMounted) return;
+
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error) {
+        // Silently handle session missing errors
+        if (error.message.includes('Auth session missing')) {
+          return; // No action needed, stay on login page
+        }
         console.error("Error checking user on mount:", error.message);
+        return;
       }
       if (user) {
         console.log("User already logged in on mount:", user);
-        router.push("/");
+        if (isMounted) {
+          router.push("/");
+        }
       }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       console.log("Auth state changed:", event, session);
       if (event === 'SIGNED_IN' && session) {
-        router.push("/");
+        if (isMounted) {
+          router.push("/");
+        }
+      }
+      if (event === 'SIGNED_OUT' || !session) {
+        if (isMounted) {
+          // No action needed, stay on login page
+        }
       }
     });
 
     checkUser();
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [router, supabase.auth]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
