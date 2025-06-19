@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { v4 as uuidv4 } from "uuid";
@@ -35,6 +35,7 @@ export default function TodoListPage() {
   const router = useRouter();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTask, setNewTask] = useState<string>("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
   const [touchStart, setTouchStart] = useState<{ [key: string]: number }>({});
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
@@ -45,6 +46,24 @@ export default function TodoListPage() {
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
   const supabase = getSupabaseClient();
   const { timezone } = useTimezone();
+
+  // ビューポートのズームをリセットする関数
+  const resetViewportZoom = () => {
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    if (viewportMeta) {
+      const originalContent = viewportMeta.getAttribute("content");
+      viewportMeta.setAttribute(
+        "content",
+        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      );
+      // ズームリセット後、元の設定に戻す（ユーザー体験を維持）
+      setTimeout(() => {
+        if (viewportMeta && originalContent) {
+          viewportMeta.setAttribute("content", originalContent);
+        }
+      }, 100);
+    }
+  };
 
   const fetchTodos = useCallback(async () => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -188,6 +207,21 @@ export default function TodoListPage() {
       }
 
       setNewTask("");
+      // フォーカス解除とズームリセット
+      if (inputRef.current) {
+        // 一時的に readonly にしてキーボードを閉じる
+        inputRef.current.readOnly = true;
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.blur();
+            inputRef.current.readOnly = false; // すぐに再有効化
+            // ビューポートのズームをリセット（ピンチ操作の模倣）
+            resetViewportZoom();
+            // スクロール調整
+            inputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 0);
+      }
       await fetchTodos();
     } catch (err) {
       console.error("Failed to add task:", err);
@@ -445,6 +479,8 @@ export default function TodoListPage() {
           onChange={(e) => setNewTask(e.target.value)}
           onKeyPress={(e) => e.key === "Enter" && handleAddTask()}
           placeholder="タスクを追加..."
+          ref={inputRef}
+          onBlur={() => console.log("Input blurred")} // デバッグ用
           className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
         />
       </div>

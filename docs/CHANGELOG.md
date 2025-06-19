@@ -494,6 +494,8 @@ This document tracks changes to the database schema for the NBRCD app.
   - Improved error handling to catch unexpected errors (e.g., 406) and display user-friendly messages.(#6cf550b)
 ### Changed
 - Fixed `function_search_path_mutable` warning for `public.create_profile_for_new_user` by adding `SET search_path = public` to the function definition. ([Supabase Linter: 0011_function_search_path_mutable])(#a10f953)
+
+
 ### Fixed
 - Corrected pagination issue in Learning Search page where clicking "もっと見る" (Load More) button caused duplicate display of initial 10 questions. Modified `debouncedLoadMore` to ensure `fetchQuestions` is called after page state update.
 - Fixed ESLint `react/no-unescaped-entities` error in `app/learning-search/page.tsx` by removing unescaped quotation marks around `q.quote` in JSX rendering.
@@ -502,22 +504,30 @@ This document tracks changes to the database schema for the NBRCD app.
   - Fixed `setPage` type error by removing unused `page` state and managing pagination with local `newPage` variable in `debouncedLoadMore`.
   - Addressed `@typescript-eslint/no-unused-vars` error by removing unused `page` state.
   - Fixed `react-hooks/exhaustive-deps` warning by including `setFetchedCount` in `useEffect` dependency array.
-(#)
 ### Changed
 - Replaced "もっと見る" (Load More) button in Learning Search page with Google Search-style pagination UI, featuring page numbers, "前へ" (Previous), and "次へ" (Next) buttons for explicit page navigation.
 - Reverted Supabase query from `.offset().limit()` to `.range()` in `fetchQuestions` to align with Supabase API.
 - Removed cache-busting parameter (`nocache`) to simplify query for debugging.
-
-### Fixed
-- Corrected pagination issue in Learning Search page where clicking "もっと見る" caused duplicate display of initial 10 questions. Modified `debouncedLoadMore` to ensure `fetchQuestions` is called after page state update.
-- Fixed ESLint `react/no-unescaped-entities` error in `app/learning-search/page.tsx` by removing unescaped quotation marks around `q.quote` in JSX rendering.
-- Fixed persistent pagination issue by passing explicit `currentPage` parameter to `fetchQuestions` and adding debug logs to verify query range and fetched IDs.
-- Resolved TypeScript errors in `app/learning-search/page.tsx`:
-  - Fixed `setPage` type error by removing unused `page` state and managing pagination with local `newPage` variable in `debouncedLoadMore`.
-  - Addressed `@typescript-eslint/no-unused-vars` error by removing unused `page` state.
-  - Fixed `react-hooks/exhaustive-deps` warning by including `setFetchedCount` in `useEffect` dependency array.
 - Simplified pagination logic by removing `fetchedCount` and `hasMore` states, relying on `totalCount` and `currentPage` for page-based navigation.
 - Fixed TypeScript error (TS7006) in `app/learning-search/page.tsx` by explicitly typing `item` as `VectorSearchResult` in the `map` callback for vector search results.
 - Fixed TypeScript errors (TS2339, TS2345) in `app/learning-search/page.tsx`:
   - Reverted `.offset().limit()` to `.range()` to fix `Property 'offset' does not exist` error.
   - Corrected `setCharts` typo to `setChapter` in `<select>` handlers to fix type mismatch errors.
+- Added debug query in `fetchTotalCount` to log total `mikitani` records for pagination validation.
+- Replaced approximated query URL logging with query parameters logging in `fetchQuestions` to debug Supabase queries safely.
+- Hid pagination UI when `totalCount ≤ itemsPerPage` to prevent unnecessary page navigation.
+### Fixed
+- Fixed TypeScript/ESLint error (@typescript-eslint/no-explicit-any) in `app/learning-search/page.tsx` by typing `error` as `PostgrestError | null` in the Supabase `rpc` call.
+- Fixed HTTP 400 (Bad Request) errors in Supabase queries by removing invalid `nocache` parameter from keyword search query.
+- Fixed TypeScript error (TS2445) in `app/learning-search/page.tsx` by removing protected `supabaseUrl` access and logging query parameters instead.
+- Fixed TypeScript JSX syntax errors in `app/learning-search/page.tsx`:
+  - Corrected `<option>` mappings in `<select>` elements to use `value={b}` instead of `{b}`.
+  - Ensured proper closing of `<select>`, `<div>`, and `<form>` tags.
+  - Added null check for `totalCount` to fix TS18047 error in pagination condition.
+(#53bed31)
+
+## 2025-06-19
+### Fixed
+- モバイルでタスク入力確定後にフォーカスが残り、画面がズームされる問題を修正。入力確定後に入力フィールドのフォーカスを解除し、必要に応じてスクロール位置を調整。
+- iOS Safari (Xcode Simulator) で `blur` が動作しない問題を修正。`setTimeout` で非同期実行し、`readOnly` 属性を一時的に設定してキーボードを閉じるように変更。
+- iOS Safari の自動ズームをリセットするため、ビューポートの `meta` タグを動的に操作し、ピンチ操作の効果をプログラム的に再現。
