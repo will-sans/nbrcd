@@ -559,4 +559,14 @@ This document tracks changes to the database schema for the NBRCD app.
 - Removed unnecessary `setTimeout` in `fetchQuestions` to improve fetch reliability.
 ### Fixed
 - Fixed ESLint `prefer-const` error in `getPageNumbers` function by changing `let endPage` to `const endPage` in `src/app/learning-search/page.tsx`.
+(#045dd3b)
+
+### Added
+- Added `author` column to `questions` table in Supabase to store Japanese author names.
+- Updated `questions` table with Japanese author names based on `philosophy` column using data from `philosophers.ts`.
+
+### Changed
+- Modified `src/app/learning-search/page.tsx` to display Japanese author names from the new `author` column instead of `philosophy` in search results.
+- Updated `Question` and `VectorSearchResult` interfaces to include the `author` field.
+- Adjusted vector search mapping to include the `author` field.
 (#)

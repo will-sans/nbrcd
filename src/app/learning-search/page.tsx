@@ -10,6 +10,7 @@ import { PostgrestError } from "@supabase/supabase-js";
 interface Question {
   id: string;
   philosophy: string;
+  author: string;
   question: string;
   learning: string;
   quote: string;
@@ -37,6 +38,7 @@ interface VectorSearchResult {
   category: string;
   book: string;
   chapter: string;
+  author: string;
   similarity: number;
   philosophy?: string;
 }
@@ -162,6 +164,7 @@ export default function LearningSearch() {
             category: item.category,
             book: item.book,
             chapter: item.chapter,
+            author: item.author,
             similarity: item.similarity,
             philosophy: item.philosophy || item.category,
             title: item.question,
@@ -226,7 +229,7 @@ export default function LearningSearch() {
     const maxPagesToShow = 5;
     const pages = [];
     let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1); // Changed 'let' to 'const'
+    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
     // Adjust startPage if endPage is at the max
     if (endPage - startPage < maxPagesToShow - 1) {
@@ -375,7 +378,7 @@ export default function LearningSearch() {
             <div key={q.id} className="p-3 bg-gray-100 rounded-lg dark:bg-gray-800">
               <h2 className="text-base font-medium dark:text-gray-100">{q.question}</h2>
               <p className="text-gray-600 text-sm dark:text-gray-400">
-                {q.philosophy} - {q.book} - {q.chapter}
+                {q.author} - {q.book} - {q.chapter}
               </p>
               <p className="text-gray-500 text-xs dark:text-gray-500">{q.category}</p>
               {q.learning && <p className="text-xs mt-1 dark:text-gray-300">{q.learning}</p>}
