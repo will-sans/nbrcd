@@ -36,8 +36,6 @@ export default function TodoListPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTask, setNewTask] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
-  const [touchStart, setTouchStart] = useState<{ [key: string]: number }>({});
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
   const [modalTaskText, setModalTaskText] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
@@ -116,18 +114,6 @@ export default function TodoListPage() {
 
     return () => subscription.unsubscribe();
   }, [router, supabase, fetchTodos]);
-
-  useEffect(() => {
-    setSwipeStates((prev) => {
-      const newState = { ...prev };
-      Object.keys(newState).forEach((id) => {
-        if (!todos.some((todo) => todo.id === id)) {
-          delete newState[id];
-        }
-      });
-      return newState;
-    });
-  }, [todos]);
 
   const savePoints = async (action: string, points: number) => {
     const allowedActions = ["login", "action_select", "task_complete"];
@@ -328,33 +314,9 @@ export default function TodoListPage() {
       }
 
       console.log(`Time tracking started for task ${taskId}`);
-      router.push("/time-tracker"); // Navigate to TimeTrackerPage
+      router.push("/time-tracker");
     } catch (err) {
       console.error("Failed to start time tracking:", err);
-    }
-  };
-  const handleTouchStart = (id: string, e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0];
-    setTouchStart((prev) => ({ ...prev, [id]: touch.clientX }));
-  };
-
-  const handleTouchMove = (id: string, e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0];
-    const startX = touchStart[id] || 0;
-    const offset = touch.clientX - startX;
-    if (offset >= -80 && offset <= 0) {
-      setSwipeStates((prev) => ({ ...prev, [id]: offset }));
-    }
-  };
-
-  const handleTouchEnd = (id: string) => {
-    const offset = swipeStates[id] || 0;
-    if (offset < -50) {
-      setSwipeStates((prev) => ({ ...prev, [id]: -80 }));
-    } else if (offset > -30) {
-      setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
-    } else {
-      setSwipeStates((prev) => ({ ...prev, [id]: 0 }));
     }
   };
 
@@ -499,16 +461,11 @@ export default function TodoListPage() {
                         ? "translateX(100%)"
                         : deletedTodos.includes(todo.id)
                         ? "translateX(-100%)"
-                        : `translateX(${swipeStates[todo.id] || 0}px)`,
+                        : "translateX(0)",
                       transition: "transform 0.3s ease",
                     }}
                   >
-                    <div
-                      className="flex items-center justify-between w-full"
-                      onTouchStart={(e) => handleTouchStart(todo.id, e)}
-                      onTouchMove={(e) => handleTouchMove(todo.id, e)}
-                      onTouchEnd={() => handleTouchEnd(todo.id)}
-                    >
+                    <div className="flex items-center justify-between w-full">
                       <div className="flex items-center flex-grow min-w-0">
                         <input
                           type="checkbox"
@@ -517,22 +474,12 @@ export default function TodoListPage() {
                           className="mr-2 dark:accent-gray-600"
                         />
                         <span
-                          onClick={() => (swipeStates[todo.id] || 0) >= -50 && openDueDateModal(todo.id)}
-                          className={(swipeStates[todo.id] || 0) >= -50 ? "cursor-pointer text-sm dark:text-gray-300 truncate" : "text-sm dark:text-gray-300 truncate"}
+                          onClick={() => openDueDateModal(todo.id)}
+                          className="cursor-pointer text-sm dark:text-gray-300 truncate"
                         >
                           {todo.text}
                         </span>
                       </div>
-                    </div>
-                    <div className="absolute right-0 h-full flex items-center">
-                      <button
-                        onClick={() => handleDelete(todo.id)}
-                        className="bg-red-500 text-white h-full px-4 py-2 dark:bg-red-600 dark:hover:bg-red-700"
-                        style={{ display: (swipeStates[todo.id] || 0) < -50 ? "block" : "none" }}
-                        aria-label="タスクを削除"
-                      >
-                        削除
-                      </button>
                     </div>
                   </div>
                 </li>
