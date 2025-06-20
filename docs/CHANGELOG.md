@@ -551,4 +551,12 @@ This document tracks changes to the database schema for the NBRCD app.
 
 ### Changed
 - タスクモーダルの優先度入力を数値入力からスライダー（範囲: 1～5）に変更し、UXを向上。スライダーの値を表示するラベルを追加。
+(#b8c6ff5)
+
+### Fixed
+- Fixed pagination not updating correctly when navigating with "Next" and "Previous" buttons by consolidating `useEffect` hooks and ensuring proper dependency handling.
+- Fixed pagination buttons overflowing the display area by adding horizontal scrolling, reducing the number of displayed pages, and adding ellipsis for large page counts.
+- Removed unnecessary `setTimeout` in `fetchQuestions` to improve fetch reliability.
+### Fixed
+- Fixed ESLint `prefer-const` error in `getPageNumbers` function by changing `let endPage` to `const endPage` in `src/app/learning-search/page.tsx`.
 (#)

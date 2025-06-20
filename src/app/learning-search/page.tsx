@@ -125,15 +125,6 @@ export default function LearningSearch() {
 
       setTotalCount(count);
       console.log("Total count:", count);
-
-      // Debug: Log total mikitani records
-      if (author === "mikitani") {
-        const { count: mikitaniCount } = await supabase
-          .from("questions")
-          .select("id", { count: "exact", head: true })
-          .eq("philosophy", "mikitani");
-        console.log("Mikitani total count:", mikitaniCount);
-      }
     } catch {
       setError("総件数の取得に失敗しました。");
     }
@@ -193,18 +184,6 @@ export default function LearningSearch() {
           if (category) query = query.eq("category", category);
           if (searchTerm) query = query.ilike("question", `%${searchTerm}%`);
 
-          // Log query parameters
-          const queryParams = {
-            range: `${(currentPage - 1) * itemsPerPage}-${currentPage * itemsPerPage - 1}`,
-            order: "id.asc",
-            philosophy: author || undefined,
-            book: book || undefined,
-            chapter: chapter || undefined,
-            category: category || undefined,
-            question: searchTerm ? `ilike.%${searchTerm}%` : undefined,
-          };
-          console.log("Query parameters:", queryParams);
-
           const { data, error } = await query;
 
           if (error) throw error;
@@ -219,28 +198,19 @@ export default function LearningSearch() {
         console.error("Fetch error:", err);
         setError("質問の取得に失敗しました。");
       } finally {
-        setTimeout(() => {
-          isFetchingRef.current = false;
-          setIsLoading(false);
-        }, 100);
+        isFetchingRef.current = false;
+        setIsLoading(false);
       }
     },
     [author, book, chapter, category, searchTerm, useVectorSearch, supabase, currentPage]
   );
 
+  // Combined useEffect to handle filter options, total count, and questions
   useEffect(() => {
     fetchFilterOptions();
     fetchTotalCount();
-  }, [fetchFilterOptions, fetchTotalCount]);
-
-  useEffect(() => {
-    setCurrentPage(1);
     fetchQuestions();
-  }, [author, book, chapter, category, searchTerm, useVectorSearch, fetchQuestions]);
-
-  useEffect(() => {
-    fetchQuestions();
-  }, [currentPage, fetchQuestions]);
+  }, [fetchFilterOptions, fetchTotalCount, fetchQuestions]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,16 +221,35 @@ export default function LearningSearch() {
   // Calculate total pages
   const totalPages = totalCount ? Math.ceil(totalCount / itemsPerPage) : 1;
 
-  // Generate page numbers to display (e.g., 1, 2, 3, ..., 10)
+  // Generate page numbers with ellipsis
   const getPageNumbers = () => {
-    const maxPagesToShow = 10;
+    const maxPagesToShow = 5;
     const pages = [];
-    const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1); // Changed 'let' to 'const'
 
+    // Adjust startPage if endPage is at the max
+    if (endPage - startPage < maxPagesToShow - 1) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+
+    // Add first page and ellipsis if needed
+    if (startPage > 1) {
+      pages.push(1);
+      if (startPage > 2) pages.push("...");
+    }
+
+    // Add page numbers
     for (let i = startPage; i <= endPage; i++) {
       pages.push(i);
     }
+
+    // Add last page and ellipsis if needed
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) pages.push("...");
+      pages.push(totalPages);
+    }
+
     return pages;
   };
 
@@ -404,11 +393,11 @@ export default function LearningSearch() {
           ))}
           {totalCount !== null && totalCount > itemsPerPage && (
             <div className="flex justify-center mt-6">
-              <nav className="flex items-center space-x-2">
+              <nav className="flex items-center space-x-2 overflow-x-auto pb-2">
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 text-sm rounded-lg ${
+                  className={`px-3 py-1 text-sm rounded-lg whitespace-nowrap ${
                     currentPage === 1
                       ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400"
                       : "bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
@@ -416,23 +405,32 @@ export default function LearningSearch() {
                 >
                   前へ
                 </button>
-                {getPageNumbers().map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 text-sm rounded-lg ${
-                      currentPage === page
-                        ? "bg-blue-500 text-white dark:bg-blue-600"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
+                {getPageNumbers().map((page, index) =>
+                  page === "..." ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="px-3 py-1 text-sm text-gray-500 dark:text-gray-400"
+                    >
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page as number)}
+                      className={`px-3 py-1 text-sm rounded-lg whitespace-nowrap ${
+                        currentPage === page
+                          ? "bg-blue-500 text-white dark:bg-blue-600"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
                 <button
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 text-sm rounded-lg ${
+                  className={`px-3 py-1 text-sm rounded-lg whitespace-nowrap ${
                     currentPage === totalPages
                       ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400"
                       : "bg-blue-500 text-white hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700"
