@@ -39,7 +39,7 @@ export default function TodoListPage() {
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
   const [modalTaskText, setModalTaskText] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
-  const [modalPriority, setModalPriority] = useState<number>(0);
+  const [modalPriority, setModalPriority] = useState<number>(1); // デフォルトを1に
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
   const supabase = getSupabaseClient();
@@ -172,7 +172,7 @@ export default function TodoListPage() {
       completed: false,
       date: nowUTC.toISOString(),
       dueDate: dueDateUTC.toISOString(),
-      priority: 0,
+      priority: 1, // 新規タスクのデフォルト優先度を1に
     };
 
     try {
@@ -325,7 +325,7 @@ export default function TodoListPage() {
     const todo = todos.find((t) => t.id === id);
     if (todo) {
       setModalTaskText(todo.text);
-      setModalPriority(todo.priority);
+      setModalPriority(Math.min(5, Math.max(1, todo.priority))); // 1～5に制限
       if (todo.dueDate) {
         const date = toZonedTime(new Date(todo.dueDate), timezone);
         const formattedDate = formatInTimeZone(date, timezone, "yyyy-MM-dd");
@@ -362,7 +362,7 @@ export default function TodoListPage() {
         .update({
           text: modalTaskText,
           due_date: dueDateUTC.toISOString(),
-          priority: Math.max(0, modalPriority),
+          priority: Math.min(5, Math.max(1, modalPriority)), // 1～5に制限
         })
         .eq("id", selectedTodoId)
         .eq("user_id", user.id);
@@ -375,7 +375,7 @@ export default function TodoListPage() {
       setSelectedTodoId(null);
       setModalTaskText("");
       setDueDate("");
-      setModalPriority(0);
+      setModalPriority(1); // リセット時に1に戻す
     } catch (err) {
       console.error("Failed to save task details:", err);
     }
@@ -522,15 +522,16 @@ export default function TodoListPage() {
             </div>
             <div className="mb-4">
               <label htmlFor="priority" className="block text-sm dark:text-gray-300 mb-1">
-                優先度
+                優先度: {modalPriority}
               </label>
               <input
                 id="priority"
-                type="number"
-                min="0"
+                type="range"
+                min="1"
+                max="5"
                 value={modalPriority}
-                onChange={(e) => setModalPriority(parseInt(e.target.value) || 0)}
-                className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
+                onChange={(e) => setModalPriority(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
               />
             </div>
             <button
@@ -547,7 +548,7 @@ export default function TodoListPage() {
                   setSelectedTodoId(null);
                   setModalTaskText("");
                   setDueDate("");
-                  setModalPriority(0);
+                  setModalPriority(1);
                 }}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg dark:bg-red-600 dark:hover:bg-red-700 text-sm"
                 aria-label="タスクを削除"
@@ -559,7 +560,7 @@ export default function TodoListPage() {
                   setSelectedTodoId(null);
                   setModalTaskText("");
                   setDueDate("");
-                  setModalPriority(0);
+                  setModalPriority(1);
                 }}
                 className="bg-gray-500 text-white px-4 py-2 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600 text-sm"
                 aria-label="キャンセル"
