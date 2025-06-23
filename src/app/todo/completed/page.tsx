@@ -15,6 +15,8 @@ interface Todo {
   completed: boolean;
   date: string;
   completed_date?: string | null;
+  goal_id?: string;
+  goals?: { title: string };
 }
 
 interface GroupedTodos {
@@ -48,7 +50,7 @@ export default function CompletedTodoPage() {
       try {
         const { data: todos, error: todosError }: { data: Todo[] | null; error: PostgrestError | null } = await supabase
           .from("todos")
-          .select("*")
+          .select("*, goals(title)")
           .eq("user_id", user.id)
           .eq("completed", true)
           .order("completed_date", { ascending: false });
@@ -307,6 +309,11 @@ export default function CompletedTodoPage() {
                         >
                           <div className="flex-1">
                             <span className="line-through text-sm dark:text-gray-300">{todo.text}</span>
+                            {todo.goal_id && (
+                              <p className="text-xs text-gray-500 dark:text-gray-500">
+                                目標: {todo.goals?.title || "不明"}
+                              </p>
+                            )}
                             <p className="text-xs text-gray-500 dark:text-gray-500">
                               {todo.completed_date
                                 ? formatInTimeZone(toZonedTime(new Date(todo.completed_date), timezone), timezone, "HH:mm", { locale: ja })

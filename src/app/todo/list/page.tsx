@@ -18,6 +18,7 @@ interface Todo {
   dueDate?: string;
   completedDate?: string;
   priority: number;
+  goal_id?: string;
 }
 
 interface SupabaseTodo {
@@ -29,6 +30,21 @@ interface SupabaseTodo {
   completed_date?: string;
   user_id: string;
   priority: number;
+  goal_id?: string;
+}
+
+interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  type: "quantitative" | "qualitative";
+  metric: { target?: number; unit?: string; current?: number; milestones?: string[] };
+  start_date: string;
+  end_date: string;
+  smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
+  fast: { frequently_discussed: string; ambitious: string; specific: string; transparent: string };
+  status: "active" | "completed" | "archived";
+  created_at: string;
 }
 
 export default function TodoListPage() {
@@ -39,13 +55,13 @@ export default function TodoListPage() {
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
   const [modalTaskText, setModalTaskText] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
-  const [modalPriority, setModalPriority] = useState<number>(1); // デフォルトを1に
+  const [modalPriority, setModalPriority] = useState<number>(1);
   const [completedTodos, setCompletedTodos] = useState<string[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<string[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const supabase = getSupabaseClient();
   const { timezone } = useTimezone();
 
-  // ビューポートのズームをリセットする関数
   const resetViewportZoom = () => {
     const viewportMeta = document.querySelector('meta[name="viewport"]');
     if (viewportMeta) {
@@ -54,7 +70,6 @@ export default function TodoListPage() {
         "content",
         "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
       );
-      // ズームリセット後、元の設定に戻す（ユーザー体験を維持）
       setTimeout(() => {
         if (viewportMeta && originalContent) {
           viewportMeta.setAttribute("content", originalContent);
@@ -93,6 +108,7 @@ export default function TodoListPage() {
         dueDate: todo.due_date,
         completedDate: todo.completed_date,
         priority: todo.priority,
+        goal_id: todo.goal_id,
       })) || [];
 
       setTodos(mappedData);
@@ -102,8 +118,21 @@ export default function TodoListPage() {
     }
   }, [supabase, router]);
 
+  const fetchGoals = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data, error } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "active");
+      if (!error) setGoals(data || []);
+    }
+  }, [supabase]);
+
   useEffect(() => {
     fetchTodos();
+    fetchGoals();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state changed:", event, session);
@@ -113,7 +142,7 @@ export default function TodoListPage() {
     });
 
     return () => subscription.unsubscribe();
-  }, [router, supabase, fetchTodos]);
+  }, [router, supabase, fetchTodos, fetchGoals]);
 
   const savePoints = async (action: string, points: number) => {
     const allowedActions = ["login", "action_select", "task_complete"];
@@ -172,7 +201,8 @@ export default function TodoListPage() {
       completed: false,
       date: nowUTC.toISOString(),
       dueDate: dueDateUTC.toISOString(),
-      priority: 1, // 新規タスクのデフォルト優先度を1に
+      priority: 1,
+      goal_id: undefined,
     };
 
     try {
@@ -186,6 +216,7 @@ export default function TodoListPage() {
           date: newTodo.date,
           due_date: newTodo.dueDate,
           priority: newTodo.priority,
+          goal_id: newTodo.goal_id,
         });
 
       if (error) {
@@ -193,17 +224,13 @@ export default function TodoListPage() {
       }
 
       setNewTask("");
-      // フォーカス解除とズームリセット
       if (inputRef.current) {
-        // 一時的に readonly にしてキーボードを閉じる
         inputRef.current.readOnly = true;
         setTimeout(() => {
           if (inputRef.current) {
             inputRef.current.blur();
-            inputRef.current.readOnly = false; // すぐに再有効化
-            // ビューポートのズームをリセット（ピンチ操作の模倣）
+            inputRef.current.readOnly = false;
             resetViewportZoom();
-            // スクロール調整
             inputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
           }
         }, 0);
@@ -225,6 +252,7 @@ export default function TodoListPage() {
     }
 
     const completedDateUTC = new Date();
+    const todo = todos.find((t) => t.id === id);
 
     try {
       const { error } = await supabase
@@ -238,6 +266,22 @@ export default function TodoListPage() {
 
       if (error) {
         throw new Error(error.message || "タスクの更新に失敗しました");
+      }
+
+      if (todo?.goal_id) {
+        const goal = goals.find((g) => g.id === todo.goal_id);
+        if (goal?.type === "quantitative") {
+          await supabase
+            .from("goals")
+            .update({
+              metric: {
+                ...goal.metric,
+                current: (goal.metric.current || 0) + 1,
+              },
+            })
+            .eq("id", goal.id)
+            .eq("user_id", user.id);
+        }
       }
 
       setTimeout(() => {
@@ -325,7 +369,7 @@ export default function TodoListPage() {
     const todo = todos.find((t) => t.id === id);
     if (todo) {
       setModalTaskText(todo.text);
-      setModalPriority(Math.min(5, Math.max(1, todo.priority))); // 1～5に制限
+      setModalPriority(Math.min(5, Math.max(1, todo.priority)));
       if (todo.dueDate) {
         const date = toZonedTime(new Date(todo.dueDate), timezone);
         const formattedDate = formatInTimeZone(date, timezone, "yyyy-MM-dd");
@@ -356,13 +400,16 @@ export default function TodoListPage() {
       )
     );
 
+    const todo = todos.find((t) => t.id === selectedTodoId);
+
     try {
       const { error } = await supabase
         .from("todos")
         .update({
           text: modalTaskText,
           due_date: dueDateUTC.toISOString(),
-          priority: Math.min(5, Math.max(1, modalPriority)), // 1～5に制限
+          priority: Math.min(5, Math.max(1, modalPriority)),
+          goal_id: todo?.goal_id || null,
         })
         .eq("id", selectedTodoId)
         .eq("user_id", user.id);
@@ -375,7 +422,7 @@ export default function TodoListPage() {
       setSelectedTodoId(null);
       setModalTaskText("");
       setDueDate("");
-      setModalPriority(1); // リセット時に1に戻す
+      setModalPriority(1);
     } catch (err) {
       console.error("Failed to save task details:", err);
     }
@@ -442,7 +489,7 @@ export default function TodoListPage() {
           onKeyPress={(e) => e.key === "Enter" && handleAddTask()}
           placeholder="タスクを追加..."
           ref={inputRef}
-          onBlur={() => console.log("Input blurred")} // デバッグ用
+          onBlur={() => console.log("Input blurred")}
           className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
         />
       </div>
@@ -473,12 +520,19 @@ export default function TodoListPage() {
                           onChange={() => handleToggle(todo.id)}
                           className="mr-2 dark:accent-gray-600"
                         />
-                        <span
-                          onClick={() => openDueDateModal(todo.id)}
-                          className="cursor-pointer text-sm dark:text-gray-300 truncate"
-                        >
-                          {todo.text}
-                        </span>
+                        <div>
+                          <span
+                            onClick={() => openDueDateModal(todo.id)}
+                            className="cursor-pointer text-sm dark:text-gray-300 truncate"
+                          >
+                            {todo.text}
+                          </span>
+                          {todo.goal_id && (
+                            <p className="text-xs text-gray-500 dark:text-gray-500">
+                              目標: {goals.find((g) => g.id === todo.goal_id)?.title}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -533,6 +587,33 @@ export default function TodoListPage() {
                 onChange={(e) => setModalPriority(parseInt(e.target.value))}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
               />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="goal" className="block text-sm dark:text-gray-300 mb-1">
+                関連目標
+              </label>
+              <select
+                id="goal"
+                value={todos.find((t) => t.id === selectedTodoId)?.goal_id || ""}
+                onChange={(e) => {
+                  const todo = todos.find((t) => t.id === selectedTodoId);
+                  if (todo) {
+                    setTodos(
+                      todos.map((t) =>
+                        t.id === selectedTodoId ? { ...t, goal_id: e.target.value || undefined } : t
+                      )
+                    );
+                  }
+                }}
+                className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
+              >
+                <option value="">なし</option>
+                {goals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>
+                    {goal.title}
+                  </option>
+                ))}
+              </select>
             </div>
             <button
               onClick={() => startTimeTracking(selectedTodoId)}

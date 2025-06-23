@@ -569,4 +569,45 @@ This document tracks changes to the database schema for the NBRCD app.
 - Modified `src/app/learning-search/page.tsx` to display Japanese author names from the new `author` column instead of `philosophy` in search results.
 - Updated `Question` and `VectorSearchResult` interfaces to include the `author` field.
 - Adjusted vector search mapping to include the `author` field.
-(#)
+(#47ee1ea)
+
+## 2025-06-21
+### Added
+- Goal Management Feature:
+  -New goals Supabase table to store goal data, including title, description, type (quantitative/qualitative), SMART and FAST criteria, and status.
+  - New goal_progress Supabase table to track PDCA (Plan-Do-Check-Act) cycle updates for goals.
+  - Added goal_id column to todos table to link tasks to goals.
+  - New /goals page (src/app/goals/page.tsx) for creating, viewing, and managing goals with a modal-based interface.
+  - Goal creation modal supporting quantitative (target/unit) and qualitative (milestones) goals, with fields for SMART/FAST criteria and end date.
+  - Progress tracking UI with PDCA phase selection and notes, including progress bars for quantitative goals.
+  - Integration with task list (src/app/todo/list/page.tsx):
+    - Dropdown in task modal to associate tasks with goals.
+    - Display of linked goal title in task list.
+    - Automatic goal progress update (for quantitative goals) when linked tasks are completed.
+  - Added "Goal Management" button to home screen (src/app/page.tsx) with FaBullseye icon.
+  - Support for goal information in completed tasks page (src/app/todo/completed/page.tsx), including display of linked goal titles.
+### Changed
+- Updated src/app/todo/list/page.tsx:
+  - Modified Todo and SupabaseTodo interfaces to include goal_id.
+  - Added fetchGoals function to retrieve active goals for task association.
+  - Enhanced task modal with goal selection dropdown.
+  - Updated handleAddTask and saveTaskDetails to handle goal_id.
+  - Added goal title display below tasks in the list.
+- Updated src/app/todo/completed/page.tsx:
+  - Updated Todo interface to include goal_id.
+  - Modified fetchCompletedTodos to join goals table for goal title display.
+  - Added goal title display for completed tasks.
+- Updated src/app/page.tsx:
+  - Added FaBullseye icon import.
+  - Added "Goal Management" navigation item linking to /goals.
+### Fixed
+- Ensured proper error handling for Supabase operations in goal creation, progress updates, and task-goal associations.
+- Added validation to prevent empty or invalid goal titles and task texts.
+- Fixed potential timezone issues in goal and task date handling using date-fns-tz.
+### Notes
+- Added indexes on goals(user_id, status) and goal_progress(goal_id, user_id) in Supabase for improved query performance.
+- Ensured mobile responsiveness for goal management UI, maintaining consistency with existing task list design.
+- Future improvements may include:
+  - Enhanced SMART/FAST field validation in goal creation.
+  - Dashboard for goal progress visualization.
+  - Notifications for upcoming goal deadlines or PDCA phase reminders.

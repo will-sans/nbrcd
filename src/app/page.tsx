@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { FaBars, FaCheck, FaQuestionCircle, FaBook, FaBrain, FaClock, FaSearch } from "react-icons/fa";
+import { FaBars, FaCheck, FaQuestionCircle, FaBook, FaBrain, FaClock, FaSearch, FaBullseye } from "react-icons/fa";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { motion } from "framer-motion";
 
@@ -44,6 +44,7 @@ export default function Home() {
     { name: "タスクリスト", path: "/todo/list", icon: <FaCheck size={24} /> },
     { name: "日誌", path: "/diary/list", icon: <FaBook size={24} /> },
     { name: "時間計測", path: "/time-tracker", icon: <FaClock size={24} /> },
+    { name: "目標管理", path: "/goals", icon: <FaBullseye size={24} /> },
   ];
 
   return (
