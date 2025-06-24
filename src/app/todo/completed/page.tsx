@@ -16,7 +16,12 @@ interface Todo {
   date: string;
   completed_date?: string | null;
   goal_id?: string;
-  goals?: { title: string };
+}
+
+interface Goal {
+  id: string;
+  title: string;
+  parent_goal_id?: string;
 }
 
 interface GroupedTodos {
@@ -28,6 +33,7 @@ export default function CompletedTodoPage() {
   const supabase = getSupabaseClient();
   const { timezone } = useTimezone();
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [groupedTodos, setGroupedTodos] = useState<GroupedTodos>({});
   const [loggedTodoIds, setLoggedTodoIds] = useState<Set<string>>(new Set());
   const [swipeStates, setSwipeStates] = useState<{ [key: string]: number }>({});
@@ -50,7 +56,7 @@ export default function CompletedTodoPage() {
       try {
         const { data: todos, error: todosError }: { data: Todo[] | null; error: PostgrestError | null } = await supabase
           .from("todos")
-          .select("*, goals(title)")
+          .select("*")
           .eq("user_id", user.id)
           .eq("completed", true)
           .order("completed_date", { ascending: false });
@@ -60,6 +66,18 @@ export default function CompletedTodoPage() {
         }
 
         setCompletedTodos(todos || []);
+
+        const { data: goalsData, error: goalsError } = await supabase
+          .from("goals")
+          .select("id, title, parent_goal_id")
+          .eq("user_id", user.id)
+          .eq("status", "active");
+
+        if (goalsError) {
+          console.error("Failed to fetch goals:", goalsError);
+        } else {
+          setGoals(goalsData || []);
+        }
 
         const { data: workLogs, error: logsError }: { data: { todo_id: string }[] | null; error: PostgrestError | null } = await supabase
           .from("work_logs")
@@ -246,6 +264,21 @@ export default function CompletedTodoPage() {
     setTouchStartX(null);
   };
 
+  const getGoalHierarchyTitle = (goalId: string): string => {
+    const goal = goals.find((g) => g.id === goalId);
+    if (!goal) return "不明";
+
+    const titles: string[] = [goal.title];
+    let current = goal;
+    while (current.parent_goal_id) {
+      const parent = goals.find((g) => g.id === current.parent_goal_id);
+      if (!parent) break;
+      titles.unshift(parent.title);
+      current = parent;
+    }
+    return titles.join(" > ");
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100 flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -311,7 +344,7 @@ export default function CompletedTodoPage() {
                             <span className="line-through text-sm dark:text-gray-300">{todo.text}</span>
                             {todo.goal_id && (
                               <p className="text-xs text-gray-500 dark:text-gray-500">
-                                目標: {todo.goals?.title || "不明"}
+                                目標: {getGoalHierarchyTitle(todo.goal_id)}
                               </p>
                             )}
                             <p className="text-xs text-gray-500 dark:text-gray-500">

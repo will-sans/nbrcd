@@ -44,6 +44,8 @@ interface Goal {
   smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
   fast: { frequently_discussed: string; ambitious: string; specific: string; transparent: string };
   status: "active" | "completed" | "archived";
+  parent_goal_id?: string;
+  sub_goals?: Goal[];
   created_at: string;
 }
 
@@ -125,8 +127,31 @@ export default function TodoListPage() {
         .from("goals")
         .select("*")
         .eq("user_id", user.id)
-        .eq("status", "active");
-      if (!error) setGoals(data || []);
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        const goalMap = new Map<string, Goal>();
+        const topLevelGoals: Goal[] = [];
+
+        (data || []).forEach((goal) => {
+          goalMap.set(goal.id, { ...goal, sub_goals: [] });
+        });
+
+        goalMap.forEach((goal) => {
+          if (goal.parent_goal_id) {
+            const parent = goalMap.get(goal.parent_goal_id);
+            if (parent) {
+              parent.sub_goals = parent.sub_goals || [];
+              parent.sub_goals.push(goal);
+            }
+          } else {
+            topLevelGoals.push(goal);
+          }
+        });
+
+        setGoals(topLevelGoals);
+      }
     }
   }, [supabase]);
 
@@ -269,19 +294,33 @@ export default function TodoListPage() {
       }
 
       if (todo?.goal_id) {
-        const goal = goals.find((g) => g.id === todo.goal_id);
-        if (goal?.type === "quantitative") {
-          await supabase
+        const updateGoalProgress = async (goalId: string) => {
+          const { data: goal } = await supabase
             .from("goals")
-            .update({
-              metric: {
-                ...goal.metric,
-                current: (goal.metric.current || 0) + 1,
-              },
-            })
-            .eq("id", goal.id)
-            .eq("user_id", user.id);
-        }
+            .select("*")
+            .eq("id", goalId)
+            .eq("user_id", user.id)
+            .single();
+
+          if (goal?.type === "quantitative") {
+            await supabase
+              .from("goals")
+              .update({
+                metric: {
+                  ...goal.metric,
+                  current: (goal.metric.current || 0) + 1,
+                },
+              })
+              .eq("id", goal.id)
+              .eq("user_id", user.id);
+          }
+
+          if (goal?.parent_goal_id) {
+            await updateGoalProgress(goal.parent_goal_id);
+          }
+        };
+
+        await updateGoalProgress(todo.goal_id);
       }
 
       setTimeout(() => {
@@ -458,6 +497,44 @@ export default function TodoListPage() {
       return acc;
     }, {});
 
+  const flattenGoals = (goals: Goal[], depth: number = 0, parentTitles: string[] = []): { id: string; title: string }[] => {
+    let result: { id: string; title: string }[] = [];
+    goals.forEach((goal) => {
+      const title = [...parentTitles, goal.title].join(" > ");
+      result.push({ id: goal.id, title });
+      if (goal.sub_goals?.length) {
+        result = result.concat(flattenGoals(goal.sub_goals, depth + 1, [...parentTitles, goal.title]));
+      }
+    });
+    return result;
+  };
+
+  const getGoalHierarchyTitle = (goalId: string): string => {
+    const findGoal = (goals: Goal[], id: string): Goal | undefined => {
+      for (const goal of goals) {
+        if (goal.id === id) return goal;
+        if (goal.sub_goals) {
+          const found = findGoal(goal.sub_goals, id);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+
+    const goal = findGoal(goals, goalId);
+    if (!goal) return "不明";
+
+    const titles: string[] = [goal.title];
+    let current = goal;
+    while (current.parent_goal_id) {
+      const parent = findGoal(goals, current.parent_goal_id);
+      if (!parent) break;
+      titles.unshift(parent.title);
+      current = parent;
+    }
+    return titles.join(" > ");
+  };
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100">
       <div className="flex items-center justify-between mb-4">
@@ -529,7 +606,7 @@ export default function TodoListPage() {
                           </span>
                           {todo.goal_id && (
                             <p className="text-xs text-gray-500 dark:text-gray-500">
-                              目標: {goals.find((g) => g.id === todo.goal_id)?.title}
+                              目標: {getGoalHierarchyTitle(todo.goal_id)}
                             </p>
                           )}
                         </div>
@@ -608,7 +685,7 @@ export default function TodoListPage() {
                 className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
               >
                 <option value="">なし</option>
-                {goals.map((goal) => (
+                {flattenGoals(goals).map((goal) => (
                   <option key={goal.id} value={goal.id}>
                     {goal.title}
                   </option>

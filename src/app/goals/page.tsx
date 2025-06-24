@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
-import { FaArrowLeft, FaPlus } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { formatInTimeZone } from "date-fns-tz";
 import { ja } from "date-fns/locale";
 import { useTimezone } from "@/lib/timezone-context";
@@ -20,6 +20,8 @@ interface Goal {
   smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
   fast: { frequently_discussed: string; ambitious: string; specific: string; transparent: string };
   status: "active" | "completed" | "archived";
+  parent_goal_id?: string;
+  sub_goals?: Goal[];
   created_at: string;
 }
 
@@ -47,6 +49,7 @@ export default function GoalsPage() {
     smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
     fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
     status: "active",
+    parent_goal_id: undefined,
   });
   const [newProgress, setNewProgress] = useState<Partial<Progress>>({
     pdca_phase: "plan",
@@ -54,6 +57,7 @@ export default function GoalsPage() {
     progress: {},
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
 
   const fetchGoals = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -74,7 +78,27 @@ export default function GoalsPage() {
       return;
     }
 
-    setGoals(data || []);
+    // Build hierarchical structure
+    const goalMap = new Map<string, Goal>();
+    const topLevelGoals: Goal[] = [];
+
+    (data || []).forEach((goal) => {
+      goalMap.set(goal.id, { ...goal, sub_goals: [] });
+    });
+
+    goalMap.forEach((goal) => {
+      if (goal.parent_goal_id) {
+        const parent = goalMap.get(goal.parent_goal_id);
+        if (parent) {
+          parent.sub_goals = parent.sub_goals || [];
+          parent.sub_goals.push(goal);
+        }
+      } else {
+        topLevelGoals.push(goal);
+      }
+    });
+
+    setGoals(topLevelGoals);
   }, [supabase, router]);
 
   const fetchProgress = useCallback(async (goalId: string) => {
@@ -131,6 +155,7 @@ export default function GoalsPage() {
       smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
       fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
       status: "active",
+      parent_goal_id: undefined,
     });
     setIsModalOpen(false);
     fetchGoals();
@@ -163,6 +188,74 @@ export default function GoalsPage() {
     fetchProgress(goal.id);
   };
 
+  const toggleGoalExpansion = (goalId: string) => {
+    setExpandedGoals((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(goalId)) {
+        newSet.delete(goalId);
+      } else {
+        newSet.add(goalId);
+      }
+      return newSet;
+    });
+  };
+
+  const calculateAggregatedProgress = (goal: Goal): number => {
+    if (goal.type === "quantitative") {
+      let totalCurrent = goal.metric.current || 0;
+      let totalTarget = goal.metric.target || 1;
+      (goal.sub_goals || []).forEach((subGoal) => {
+        if (subGoal.type === "quantitative") {
+          totalCurrent += subGoal.metric.current || 0;
+          totalTarget += subGoal.metric.target || 0;
+        }
+      });
+      return (totalCurrent / totalTarget) * 100;
+    }
+    return 0; // Qualitative goals don't aggregate progress numerically
+  };
+
+  const renderGoal = (goal: Goal, depth: number = 0) => (
+    <div key={goal.id} style={{ marginLeft: `${depth * 20}px` }}>
+      <div
+        className="p-4 bg-gray-100 rounded-lg dark:bg-gray-800 cursor-pointer flex items-center"
+        onClick={() => handleGoalClick(goal)}
+      >
+        {(goal.sub_goals?.length || 0) > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleGoalExpansion(goal.id);
+            }}
+            className="mr-2"
+          >
+            {expandedGoals.has(goal.id) ? <FaChevronDown /> : <FaChevronRight />}
+          </button>
+        )}
+        <div className="flex-1">
+          <h2 className="text-base font-medium dark:text-gray-100">{goal.title}</h2>
+          <p className="text-sm dark:text-gray-300">
+            {goal.type === "quantitative"
+              ? `${goal.metric.current || 0}/${goal.metric.target} ${goal.metric.unit}`
+              : goal.metric.milestones?.join(", ")}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-500">
+            {formatInTimeZone(new Date(goal.end_date), timezone, "yyyy年M月d日", { locale: ja })}
+          </p>
+          {goal.type === "quantitative" && (goal.sub_goals?.length || 0) > 0 && (
+            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
+              <div
+                className="bg-blue-600 h-2.5 rounded-full"
+                style={{ width: `${calculateAggregatedProgress(goal)}%` }}
+              ></div>
+            </div>
+          )}
+        </div>
+      </div>
+      {expandedGoals.has(goal.id) && goal.sub_goals?.map((subGoal) => renderGoal(subGoal, depth + 1))}
+    </div>
+  );
+
   return (
     <div className="p-6 max-w-2xl mx-auto text-black bg-white min-h-screen dark:bg-gray-900 dark:text-gray-100">
       <div className="flex items-center justify-between mb-4">
@@ -182,23 +275,7 @@ export default function GoalsPage() {
       </div>
 
       <div className="space-y-4">
-        {goals.map((goal) => (
-          <div
-            key={goal.id}
-            className="p-4 bg-gray-100 rounded-lg dark:bg-gray-800 cursor-pointer"
-            onClick={() => handleGoalClick(goal)}
-          >
-            <h2 className="text-base font-medium dark:text-gray-100">{goal.title}</h2>
-            <p className="text-sm dark:text-gray-300">
-              {goal.type === "quantitative"
-                ? `${goal.metric.current || 0}/${goal.metric.target} ${goal.metric.unit}`
-                : goal.metric.milestones?.join(", ")}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500">
-              {formatInTimeZone(new Date(goal.end_date), timezone, "yyyy年M月d日", { locale: ja })}
-            </p>
-          </div>
-        ))}
+        {goals.map((goal) => renderGoal(goal))}
       </div>
 
       {isModalOpen && (
@@ -275,6 +352,20 @@ export default function GoalsPage() {
               }
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             />
+            <select
+              value={newGoal.parent_goal_id || ""}
+              onChange={(e) =>
+                setNewGoal({ ...newGoal, parent_goal_id: e.target.value || undefined })
+              }
+              className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">親目標なし</option>
+              {goals.map((goal) => (
+                <option key={goal.id} value={goal.id}>
+                  {goal.title}
+                </option>
+              ))}
+            </select>
             <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -364,6 +455,20 @@ export default function GoalsPage() {
               >
                 進捗を追加
               </button>
+            </div>
+            <div className="mb-4">
+              <h3 className="text-base font-medium dark:text-gray-100">小目標</h3>
+              <ul className="mt-2 space-y-2">
+                {(selectedGoal.sub_goals || []).map((subGoal) => (
+                  <li
+                    key={subGoal.id}
+                    className="text-sm dark:text-gray-300 cursor-pointer"
+                    onClick={() => handleGoalClick(subGoal)}
+                  >
+                    {subGoal.title} ({subGoal.type === "quantitative" ? `${subGoal.metric.current}/${subGoal.metric.target} ${subGoal.metric.unit}` : subGoal.metric.milestones?.join(", ")})
+                  </li>
+                ))}
+              </ul>
             </div>
             <div className="flex justify-end space-x-2">
               <button

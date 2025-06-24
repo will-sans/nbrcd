@@ -612,3 +612,52 @@ This document tracks changes to the database schema for the NBRCD app.
   - Dashboard for goal progress visualization.
   - Notifications for upcoming goal deadlines or PDCA phase reminders.
 (#7c2ba3a)
+
+## [1.2.0] - 2025-06-24
+
+### Added
+- **Sub-Goal Nesting for Goal Management**:
+  - Added `parent_goal_id` column to the `goals` Supabase table to support hierarchical goal structures, enabling sub-goals to be nested under parent goals.
+  - Updated `src/app/goals/page.tsx`:
+    - Modified `Goal` interface to include `parent_goal_id` and `sub_goals` for recursive goal structures.
+    - Enhanced `fetchGoals` to build a hierarchical goal tree by assigning sub-goals to their parents in-memory.
+    - Added collapsible UI with `FaChevronDown` and `FaChevronRight` icons to display parent goals and sub-goals hierarchically.
+    - Implemented `calculateAggregatedProgress` to sum progress for quantitative parent goals, including sub-goals.
+    - Added parent goal selection dropdown in the goal creation modal to allow creating sub-goals.
+    - Added sub-goals section in the goal details modal to list and navigate to sub-goals.
+  - Updated `src/app/todo/list/page.tsx`:
+    - Modified `fetchGoals` to build a hierarchical goal structure.
+    - Added `flattenGoals` to create a flat list of goals with hierarchical titles (e.g., "Parent > Sub-Goal") for the goal selection dropdown.
+    - Added `getGoalHierarchyTitle` to display full goal paths for tasks linked to goals or sub-goals.
+    - Updated `handleToggle` to recursively update parent goals' progress when a task linked to a sub-goal is completed.
+  - Updated `src/app/todo/completed/page.tsx`:
+    - Added fetching of goals to retrieve `id`, `title`, and `parent_goal_id`.
+    - Added `getGoalHierarchyTitle` to display hierarchical goal titles (e.g., "Parent > Sub-Goal") for completed tasks.
+  - Added database index `idx_goals_parent_goal_id` on `goals(parent_goal_id)` for improved query performance.
+
+### Changed
+- Updated `goals` table schema to include `parent_goal_id` with a foreign key constraint referencing `goals(id)`.
+- Modified `Goal` interface across `src/app/goals/page.tsx`, `src/app/todo/list/page.tsx`, and `src/app/todo/completed/page.tsx` to support `parent_goal_id` and `sub_goals`.
+- Simplified goal title display in `src/app/todo/completed/page.tsx` by fetching goals directly instead of joining, reducing dependency on Supabase join performance.
+
+### Fixed
+- Ensured robust handling of missing or invalid `parent_goal_id` values, defaulting to "不明" in UI displays.
+- Fixed potential issues with deep goal hierarchies by using in-memory processing for goal tree construction.
+- Maintained consistency in UI styling for hierarchical goal displays across light and dark modes.
+
+### Notes
+- Recommended adding cascading deletes on `parent_goal_id` to handle sub-goal removal when parent goals are deleted:
+  ```sql
+  ALTER TABLE goals
+  DROP CONSTRAINT goals_parent_goal_id_fkey,
+  ADD CONSTRAINT goals_parent_goal_id_fkey
+    FOREIGN KEY (parent_goal_id)
+    REFERENCES goals(id)
+    ON DELETE CASCADE;
+  ```
+- Future improvements may include:
+  - Limiting sub-goal nesting depth to prevent excessive hierarchies.
+  - Enhanced progress tracking for qualitative sub-goals.
+  - Lazy-loading sub-goals for large datasets.
+  - Sub-goal deletion and reparenting functionality.
+
