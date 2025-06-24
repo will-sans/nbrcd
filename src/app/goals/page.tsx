@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
-import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash } from "react-icons/fa";
 import { formatInTimeZone } from "date-fns-tz";
 import { ja } from "date-fns/locale";
 import { useTimezone } from "@/lib/timezone-context";
@@ -181,6 +181,35 @@ export default function GoalsPage() {
 
     setNewProgress({ pdca_phase: "plan", notes: "", progress: {} });
     fetchProgress(goalId);
+  };
+
+  const handleDeleteGoal = async (goalId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    if (!confirm("この目標と関連するサブ目標、タスク、進捗を削除しますか？")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("goals")
+        .delete()
+        .eq("id", goalId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "目標の削除に失敗しました");
+      }
+
+      setSelectedGoal(null);
+      fetchGoals();
+    } catch (err) {
+      console.error("Failed to delete goal:", err);
+    }
   };
 
   const handleGoalClick = (goal: Goal) => {
@@ -471,6 +500,13 @@ export default function GoalsPage() {
               </ul>
             </div>
             <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => handleDeleteGoal(selectedGoal.id)}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg dark:bg-red-600 dark:hover:bg-red-700"
+                aria-label="目標を削除"
+              >
+                <FaTrash className="inline mr-2" /> 削除
+              </button>
               <button
                 onClick={() => setSelectedGoal(null)}
                 className="bg-gray-500 text-white px-4 py-2 rounded-lg dark:bg-gray-700"

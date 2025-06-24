@@ -660,4 +660,54 @@ This document tracks changes to the database schema for the NBRCD app.
   - Enhanced progress tracking for qualitative sub-goals.
   - Lazy-loading sub-goals for large datasets.
   - Sub-goal deletion and reparenting functionality.
+(#a8d077a)
 
+## [1.3.0] - 2025-06-24
+
+### Added
+- **Goal Deletion with Cascading Deletes**:
+  - Added goal deletion functionality in `src/app/goals/page.tsx` with a "Delete" button in the goal details modal, using a `FaTrash` icon for consistency.
+  - Implemented `handleDeleteGoal` function to delete a goal via Supabase, including user authentication, a confirmation prompt, and error handling.
+  - Added confirmation prompt to warn users about cascading deletion of sub-goals, linked tasks, and progress entries.
+  - Updated Supabase schema to include `ON DELETE CASCADE` for foreign key constraints:
+    - `todos.goal_id` to cascade delete tasks when a goal is deleted.
+    - `goal_progress.goal_id` to cascade delete progress entries when a goal is deleted.
+    - `goals.parent_goal_id` to cascade delete sub-goals when a parent goal is deleted.
+  - SQL for cascading deletes:
+    ```sql
+    ALTER TABLE todos
+    DROP CONSTRAINT IF EXISTS todos_goal_id_fkey,
+    ADD CONSTRAINT todos_goal_id_fkey
+    FOREIGN KEY (goal_id)
+    REFERENCES goals(id)
+    ON DELETE CASCADE;
+
+    ALTER TABLE goal_progress
+    DROP CONSTRAINT IF EXISTS goal_progress_goal_id_fkey,
+    ADD CONSTRAINT goal_progress_goal_id_fkey
+    FOREIGN KEY (goal_id)
+    REFERENCES goals(id)
+    ON DELETE CASCADE;
+
+    ALTER TABLE goals
+    DROP CONSTRAINT IF EXISTS goals_parent_goal_id_fkey,
+    ADD CONSTRAINT goals_parent_goal_id_fkey
+    FOREIGN KEY (parent_goal_id)
+    REFERENCES goals(id)
+    ON DELETE CASCADE;
+    ```
+
+### Changed
+- Updated `src/app/goals/page.tsx` to include a delete button in the goal details modal, maintaining consistent styling with existing buttons (`bg-red-500`, etc.).
+- Enhanced error handling in `handleDeleteGoal` to ensure robust deletion and UI refresh after successful deletion.
+
+### Fixed
+- Resolved referential integrity errors when deleting goals by implementing cascading deletes, ensuring no orphaned records in `todos`, `goal_progress`, or `goals` tables.
+- Ensured the goal deletion UI provides clear feedback with a confirmation prompt to prevent accidental deletions.
+
+### Notes
+- The cascading delete ensures that deleting a goal automatically removes associated sub-goals, tasks, and progress entries, maintaining database integrity.
+- Future improvements may include:
+  - Soft delete option (e.g., setting `status` to `archived`) for recoverable deletions.
+  - Handling of `work_logs` to prevent deletion conflicts for tasks with logged work.
+  - Enhanced UI feedback for deletion success or failure.
