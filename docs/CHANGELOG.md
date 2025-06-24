@@ -712,3 +712,27 @@ This document tracks changes to the database schema for the NBRCD app.
   - Handling of `work_logs` to prevent deletion conflicts for tasks with logged work.
   - Enhanced UI feedback for deletion success or failure.
 (#e0c4e2f)
+
+## [1.4.0] - 2025-06-24
+
+### Added
+- **Multi-Level Goal Nesting**:
+  - Added `flattenGoals` function to `src/app/goals/page.tsx` to generate a flat list of all goals, including sub-goals, with hierarchical titles (e.g., "Parent > Sub-Goal").
+  - Updated the parent goal selection dropdown in the goal creation modal to include sub-goals, enabling multi-level nesting (e.g., Goal > Sub-Goal > Sub-Sub-Goal).
+
+### Changed
+- Modified `src/app/goals/page.tsx` to use `flattenGoals` in the parent goal dropdown, replacing the previous top-level-only goal list.
+- Ensured hierarchical titles in the dropdown for clarity when selecting sub-goals as parents.
+
+### Fixed
+- Fixed limitation where only top-level goals could be selected as parents, allowing deeper goal hierarchies.
+- Maintained UI consistency with hierarchical displays in task-related pages (`src/app/todo/list/page.tsx`, `src/app/todo/completed/page.tsx`).
+
+### Notes
+- The existing `goals` table schema with `parent_goal_id` supports multi-level nesting, requiring no database changes.
+- Recommended adding a depth limit (e.g., 3 levels) to prevent excessive nesting, which can be implemented in `handleCreateGoal` if needed.
+- Future improvements may include:
+  - Custom styling for the parent goal dropdown (e.g., indentation with CSS).
+  - Validation to limit goal nesting depth.
+  - Enhanced performance for large goal sets with caching or lazy-loading.
+(#)

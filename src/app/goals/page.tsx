@@ -244,6 +244,18 @@ export default function GoalsPage() {
     return 0; // Qualitative goals don't aggregate progress numerically
   };
 
+  const flattenGoals = (goals: Goal[], depth: number = 0, parentTitles: string[] = []): { id: string; title: string }[] => {
+    let result: { id: string; title: string }[] = [];
+    goals.forEach((goal) => {
+      const title = [...parentTitles, goal.title].join(" > ");
+      result.push({ id: goal.id, title });
+      if (goal.sub_goals?.length) {
+        result = result.concat(flattenGoals(goal.sub_goals, depth + 1, [...parentTitles, goal.title]));
+      }
+    });
+    return result;
+  };
+
   const renderGoal = (goal: Goal, depth: number = 0) => (
     <div key={goal.id} style={{ marginLeft: `${depth * 20}px` }}>
       <div
@@ -389,7 +401,7 @@ export default function GoalsPage() {
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             >
               <option value="">親目標なし</option>
-              {goals.map((goal) => (
+              {flattenGoals(goals).map((goal) => (
                 <option key={goal.id} value={goal.id}>
                   {goal.title}
                 </option>
