@@ -711,3 +711,4 @@ This document tracks changes to the database schema for the NBRCD app.
   - Soft delete option (e.g., setting `status` to `archived`) for recoverable deletions.
   - Handling of `work_logs` to prevent deletion conflicts for tasks with logged work.
   - Enhanced UI feedback for deletion success or failure.
+(#e0c4e2f)
