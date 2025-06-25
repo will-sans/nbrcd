@@ -277,8 +277,8 @@ export default function GoalsPage() {
           <h2 className="text-base font-medium dark:text-gray-100">{goal.title}</h2>
           <p className="text-sm dark:text-gray-300">
             {goal.type === "quantitative"
-              ? `${goal.metric.current || 0}/${goal.metric.target} ${goal.metric.unit}`
-              : goal.metric.milestones?.join(", ")}
+              ? `${goal.metric?.current || 0}/${goal.metric?.target || 0} ${goal.metric?.unit || ""}` // metricがundefinedの場合を考慮
+              : goal.metric?.milestones?.join(", ")} {/* ここを修正 */}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-500">
             {formatInTimeZone(new Date(goal.end_date), timezone, "yyyy年M月d日", { locale: ja })}
@@ -506,7 +506,10 @@ export default function GoalsPage() {
                     className="text-sm dark:text-gray-300 cursor-pointer"
                     onClick={() => handleGoalClick(subGoal)}
                   >
-                    {subGoal.title} ({subGoal.type === "quantitative" ? `${subGoal.metric.current}/${subGoal.metric.target} ${subGoal.metric.unit}` : subGoal.metric.milestones?.join(", ")})
+                    {subGoal.title} (
+                    {subGoal.type === "quantitative"
+                      ? `${subGoal.metric?.current || 0}/${subGoal.metric?.target || 0} ${subGoal.metric?.unit || ""}` // metricがundefinedの場合を考慮
+                      : subGoal.metric?.milestones?.join(", ")})
                   </li>
                 ))}
               </ul>
