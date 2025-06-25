@@ -766,4 +766,4 @@ This document tracks changes to the database schema for the NBRCD app.
   - Validation for goal hierarchy depth to prevent excessive nesting during modification.
   - Confirmation prompt for goal modifications to match the deletion prompt.
   - Enhanced modal with SMART/FAST fields for detailed editing.
-(#)
+(#6650b37)
