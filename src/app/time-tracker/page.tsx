@@ -106,28 +106,13 @@ export default function TimeTrackerPage() {
 
         if (sessionError) throw sessionError;
 
-        if (currentSession.todo_id) {
-          const { error: todoError } = await supabase
-            .from("todos")
-            .update({
-              completed: true,
-              completed_date: endTime.toISOString(),
-            })
-            .eq("id", currentSession.todo_id)
-            .eq("user_id", user.id);
-
-          if (todoError) throw todoError;
-
-          setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== currentSession.todo_id));
-        }
-
         setIsTracking(false);
         setStartTime(null);
         setElapsedTime(0);
         setCurrentSession(null);
       } catch (err) {
         console.error("Failed to stop tracking:", err);
-        setError("時間計測の終了またはタスクの完了に失敗しました");
+        setError("時間計測の終了に失敗しました");
         setIsTracking(false);
         setStartTime(null);
         setElapsedTime(0);
