@@ -736,3 +736,34 @@ This document tracks changes to the database schema for the NBRCD app.
   - Validation to limit goal nesting depth.
   - Enhanced performance for large goal sets with caching or lazy-loading.
 (#f1419aa)
+
+## [1.5.0] - 2025-06-25
+
+### Added
+- **Goal Modification Feature**:
+  - Added "Modify" button with `FaEdit` icon in the goal details modal of `src/app/goals/page.tsx`, positioned to the left of the "Delete" button.
+  - Implemented `handleModifyGoal` function to update existing goals in Supabase, preserving `id`, `user_id`, `created_at`, and `status`.
+  - Added `openModifyModal` function to open the creation modal in modify mode, pre-filling with the selected goal's data.
+  - Added `modalMode` state (`"create" | "modify"`) to toggle between creation and modification in the modal.
+  - Reused the existing goal creation modal for modifications, with dynamic title ("新しい目標" or "目標の修正") and save button text ("作成" or "保存").
+  - Added description field to the goal creation/modification modal for consistency with the `goals` table schema.
+  - Filtered parent goal dropdown to exclude the current goal during modification to prevent self-referencing.
+
+### Changed
+- Updated `src/app/goals/page.tsx`:
+  - Modified the goal creation modal to handle both creation and modification, using `modalMode` to control behavior.
+  - Added `toZonedTime` import for consistent date handling in the modal.
+  - Updated cancel button to reset `modalMode` to "create" and clear fields.
+  - Styled "Modify" button with `bg-yellow-500` for visual distinction from create (`bg-blue-500`) and delete (`bg-red-500`) buttons.
+
+### Fixed
+- Ensured the parent goal dropdown excludes the current goal during modification to prevent circular references in the goal hierarchy.
+- Maintained consistent UI styling for the new "Modify" button across light and dark modes.
+
+### Notes
+- No database schema changes were required, as the `goals` table already supports all editable fields.
+- Future improvements may include:
+  - Validation for goal hierarchy depth to prevent excessive nesting during modification.
+  - Confirmation prompt for goal modifications to match the deletion prompt.
+  - Enhanced modal with SMART/FAST fields for detailed editing.
+(#)

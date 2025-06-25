@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
-import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash, FaEdit } from "react-icons/fa";
 import { formatInTimeZone } from "date-fns-tz";
 import { ja } from "date-fns/locale";
 import { useTimezone } from "@/lib/timezone-context";
@@ -57,6 +57,7 @@ export default function GoalsPage() {
     progress: {},
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"create" | "modify">("create");
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
 
   const fetchGoals = useCallback(async () => {
@@ -158,6 +159,48 @@ export default function GoalsPage() {
       parent_goal_id: undefined,
     });
     setIsModalOpen(false);
+    setModalMode("create");
+    fetchGoals();
+  };
+
+  const handleModifyGoal = async () => {
+    if (!selectedGoal) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const goalData = {
+      ...newGoal,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("goals")
+      .update(goalData)
+      .eq("id", selectedGoal.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Failed to modify goal:", error);
+      return;
+    }
+
+    setNewGoal({
+      title: "",
+      description: "",
+      type: "quantitative",
+      metric: { target: 0, unit: "", current: 0 },
+      smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
+      fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
+      status: "active",
+      parent_goal_id: undefined,
+    });
+    setIsModalOpen(false);
+    setModalMode("create");
+    setSelectedGoal(null);
     fetchGoals();
   };
 
@@ -215,6 +258,22 @@ export default function GoalsPage() {
   const handleGoalClick = (goal: Goal) => {
     setSelectedGoal(goal);
     fetchProgress(goal.id);
+  };
+
+  const openModifyModal = (goal: Goal) => {
+    setNewGoal({
+      title: goal.title,
+      description: goal.description,
+      type: goal.type,
+      metric: goal.metric,
+      end_date: goal.end_date,
+      smart: goal.smart,
+      fast: goal.fast,
+      status: goal.status,
+      parent_goal_id: goal.parent_goal_id,
+    });
+    setModalMode("modify");
+    setIsModalOpen(true);
   };
 
   const toggleGoalExpansion = (goalId: string) => {
@@ -277,8 +336,8 @@ export default function GoalsPage() {
           <h2 className="text-base font-medium dark:text-gray-100">{goal.title}</h2>
           <p className="text-sm dark:text-gray-300">
             {goal.type === "quantitative"
-              ? `${goal.metric?.current || 0}/${goal.metric?.target || 0} ${goal.metric?.unit || ""}` // metricがundefinedの場合を考慮
-              : goal.metric?.milestones?.join(", ")} {/* ここを修正 */}
+              ? `${goal.metric.current || 0}/${goal.metric.target || 0} ${goal.metric.unit || ""}`
+              : goal.metric.milestones?.join(", ") || ""}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-500">
             {formatInTimeZone(new Date(goal.end_date), timezone, "yyyy年M月d日", { locale: ja })}
@@ -308,7 +367,20 @@ export default function GoalsPage() {
         </button>
         <h1 className="text-xl font-semibold dark:text-gray-100">目標管理</h1>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setModalMode("create");
+            setNewGoal({
+              title: "",
+              description: "",
+              type: "quantitative",
+              metric: { target: 0, unit: "", current: 0 },
+              smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
+              fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
+              status: "active",
+              parent_goal_id: undefined,
+            });
+            setIsModalOpen(true);
+          }}
           className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
         >
           <FaPlus size={24} />
@@ -322,12 +394,20 @@ export default function GoalsPage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg dark:bg-gray-800 max-w-md w-full">
-            <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">新しい目標</h2>
+            <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">
+              {modalMode === "create" ? "新しい目標" : "目標の修正"}
+            </h2>
             <input
               type="text"
               value={newGoal.title}
               onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
               placeholder="目標のタイトル"
+              className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
+            />
+            <textarea
+              value={newGoal.description || ""}
+              onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
+              placeholder="目標の説明"
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             />
             <select
@@ -336,7 +416,7 @@ export default function GoalsPage() {
                 setNewGoal({
                   ...newGoal,
                   type: e.target.value as "quantitative" | "qualitative",
-                  metric: e.target.value === "quantitative" ? { target: 0, unit: "", current: 0 } : { milestones: [] },
+                  metric: e.target.value === "quantitative" ? { target: 0, unit: "", current: newGoal.metric?.current || 0 } : { milestones: [] },
                 })
               }
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
@@ -401,7 +481,7 @@ export default function GoalsPage() {
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             >
               <option value="">親目標なし</option>
-              {flattenGoals(goals).map((goal) => (
+              {flattenGoals(goals).filter((goal) => goal.id !== selectedGoal?.id).map((goal) => (
                 <option key={goal.id} value={goal.id}>
                   {goal.title}
                 </option>
@@ -409,23 +489,36 @@ export default function GoalsPage() {
             </select>
             <div className="flex justify-end space-x-2">
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setModalMode("create");
+                  setNewGoal({
+                    title: "",
+                    description: "",
+                    type: "quantitative",
+                    metric: { target: 0, unit: "", current: 0 },
+                    smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
+                    fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
+                    status: "active",
+                    parent_goal_id: undefined,
+                  });
+                }}
                 className="bg-gray-500 text-white px-4 py-2 rounded-lg dark:bg-gray-700"
               >
                 キャンセル
               </button>
               <button
-                onClick={handleCreateGoal}
+                onClick={modalMode === "create" ? handleCreateGoal : handleModifyGoal}
                 className="bg-blue-500 text-white px-4 py-2 rounded-lg dark:bg-blue-600"
               >
-                作成
+                {modalMode === "create" ? "作成" : "保存"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {selectedGoal && (
+      {selectedGoal && !isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg dark:bg-gray-800 max-w-md w-full">
             <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">{selectedGoal.title}</h2>
@@ -508,13 +601,20 @@ export default function GoalsPage() {
                   >
                     {subGoal.title} (
                     {subGoal.type === "quantitative"
-                      ? `${subGoal.metric?.current || 0}/${subGoal.metric?.target || 0} ${subGoal.metric?.unit || ""}` // metricがundefinedの場合を考慮
-                      : subGoal.metric?.milestones?.join(", ")})
+                      ? `${subGoal.metric.current || 0}/${subGoal.metric.target || 0} ${subGoal.metric.unit || ""}`
+                      : subGoal.metric.milestones?.join(", ") || ""})
                   </li>
                 ))}
               </ul>
             </div>
             <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => openModifyModal(selectedGoal)}
+                className="bg-yellow-500 text-white px-4 py-2 rounded-lg dark:bg-yellow-600 dark:hover:bg-yellow-700"
+                aria-label="目標を修正"
+              >
+                <FaEdit className="inline mr-2" /> 修正
+              </button>
               <button
                 onClick={() => handleDeleteGoal(selectedGoal.id)}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg dark:bg-red-600 dark:hover:bg-red-700"
