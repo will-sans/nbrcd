@@ -773,3 +773,52 @@ This document tracks changes to the database schema for the NBRCD app.
 ### Added
 - Added foreign key constraint with `ON DELETE CASCADE` to `time_sessions` table to automatically delete associated `time_sessions` records when a `todo` record is deleted.
 (#0f63432)
+
+## [1.6.0] - 2025-06-30
+
+### Added
+- **Simplified Goal Schema with Milestones as Sub-Goals**:
+  - Removed `type` column from `goals` table, using nullable `metric` column to differentiate quantitative (`metric: { target, unit, current }`) and qualitative (`metric: null`, with sub-goals as milestones) goals.
+  - Added sub-goal creation for qualitative goals in `src/app/goals/page.tsx`:
+    - Implemented `handleAddSubGoal` to create milestones as sub-goals.
+    - Added "マイルストーン追加" section in the goal details modal for qualitative goals.
+    - Added toggle buttons to mark sub-goals (milestones) as completed or active.
+  - Updated progress tracking:
+    - Modified `calculateAggregatedProgress` to calculate progress for qualitative goals based on sub-goal completion percentage.
+    - Added sub-goal completion toggles in the goal details modal.
+  - SQL for schema update:
+    ```sql
+    ALTER TABLE goals
+    DROP COLUMN IF EXISTS type;
+
+    ALTER TABLE goals
+    ALTER COLUMN metric DROP NOT NULL;
+    ```
+
+### Changed
+- Updated `src/app/goals/page.tsx`:
+  - Removed `type` from `Goal` interface and made `metric` nullable.
+  - Replaced type selection dropdown with a single `metric.target` input, where an empty value indicates a qualitative goal.
+  - Updated `renderGoal` to display sub-goal completion count for qualitative goals.
+  - Modified progress input to use `metric` presence for quantitative/qualitative logic.
+  - Added sub-goal creation section for qualitative goals.
+- Updated `src/app/todo/list/page.tsx`:
+  - Updated `Goal` interface to remove `type` and make `metric` nullable.
+  - Modified `handleToggle` to mark qualitative goals (milestones) as completed when linked tasks are completed.
+- Updated `src/app/todo/completed/page.tsx`:
+  - Updated `Goal` interface to remove `type` and make `metric` nullable.
+  - No changes to UI or logic, as it only displays goal titles.
+
+### Fixed
+- Ensured robust handling of nullable `metric` in UI and logic, defaulting to sub-goal-based progress for qualitative goals.
+- Fixed progress calculation for qualitative goals by using sub-goal completion status.
+- Maintained UI consistency across light and dark modes for new sub-goal creation and toggle features.
+
+### Notes
+- The simplified schema reduces complexity by using `metric` and sub-goals to distinguish goal types, with milestones managed as sub-goals.
+- Future improvements may include:
+  - Visual indicators for quantitative vs. qualitative goals in the UI.
+  - Validation for sub-goal creation to prevent excessive milestones.
+  - Enhanced progress tracking for qualitative goals with weighted milestones.
+(#)
+

@@ -13,8 +13,7 @@ interface Goal {
   id: string;
   title: string;
   description: string;
-  type: "quantitative" | "qualitative";
-  metric: { target?: number; unit?: string; current?: number; milestones?: string[] };
+  metric: { target?: number; unit?: string; current?: number } | null;
   start_date: string;
   end_date: string;
   smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
@@ -44,8 +43,7 @@ export default function GoalsPage() {
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: "",
     description: "",
-    type: "quantitative",
-    metric: { target: 0, unit: "", current: 0 },
+    metric: null,
     smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
     fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
     status: "active",
@@ -56,6 +54,7 @@ export default function GoalsPage() {
     notes: "",
     progress: {},
   });
+  const [newSubGoalTitle, setNewSubGoalTitle] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "modify">("create");
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
@@ -151,8 +150,7 @@ export default function GoalsPage() {
     setNewGoal({
       title: "",
       description: "",
-      type: "quantitative",
-      metric: { target: 0, unit: "", current: 0 },
+      metric: null,
       smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
       fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
       status: "active",
@@ -191,8 +189,7 @@ export default function GoalsPage() {
     setNewGoal({
       title: "",
       description: "",
-      type: "quantitative",
-      metric: { target: 0, unit: "", current: 0 },
+      metric: null,
       smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
       fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
       status: "active",
@@ -224,6 +221,41 @@ export default function GoalsPage() {
 
     setNewProgress({ pdca_phase: "plan", notes: "", progress: {} });
     fetchProgress(goalId);
+  };
+
+  const handleAddSubGoal = async (parentGoalId: string) => {
+    if (!newSubGoalTitle.trim()) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    const subGoalData = {
+      id: uuidv4(),
+      user_id: user.id,
+      title: newSubGoalTitle,
+      description: "",
+      metric: null,
+      start_date: new Date().toISOString(),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
+      fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
+      status: "active",
+      parent_goal_id: parentGoalId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("goals").insert(subGoalData);
+    if (error) {
+      console.error("Failed to add sub-goal:", error);
+      return;
+    }
+
+    setNewSubGoalTitle("");
+    fetchGoals();
   };
 
   const handleDeleteGoal = async (goalId: string) => {
@@ -264,7 +296,6 @@ export default function GoalsPage() {
     setNewGoal({
       title: goal.title,
       description: goal.description,
-      type: goal.type,
       metric: goal.metric,
       end_date: goal.end_date,
       smart: goal.smart,
@@ -289,18 +320,21 @@ export default function GoalsPage() {
   };
 
   const calculateAggregatedProgress = (goal: Goal): number => {
-    if (goal.type === "quantitative") {
+    if (goal.metric) {
       let totalCurrent = goal.metric.current || 0;
       let totalTarget = goal.metric.target || 1;
       (goal.sub_goals || []).forEach((subGoal) => {
-        if (subGoal.type === "quantitative") {
+        if (subGoal.metric) {
           totalCurrent += subGoal.metric.current || 0;
           totalTarget += subGoal.metric.target || 0;
         }
       });
       return (totalCurrent / totalTarget) * 100;
+    } else {
+      const subGoals = goal.sub_goals || [];
+      const completedSubGoals = subGoals.filter((subGoal) => subGoal.status === "completed").length;
+      return subGoals.length > 0 ? (completedSubGoals / subGoals.length) * 100 : 0;
     }
-    return 0; // Qualitative goals don't aggregate progress numerically
   };
 
   const flattenGoals = (goals: Goal[], depth: number = 0, parentTitles: string[] = []): { id: string; title: string }[] => {
@@ -335,14 +369,14 @@ export default function GoalsPage() {
         <div className="flex-1">
           <h2 className="text-base font-medium dark:text-gray-100">{goal.title}</h2>
           <p className="text-sm dark:text-gray-300">
-            {goal.type === "quantitative"
+            {goal.metric
               ? `${goal.metric.current || 0}/${goal.metric.target || 0} ${goal.metric.unit || ""}`
-              : goal.metric.milestones?.join(", ") || ""}
+              : `${(goal.sub_goals || []).filter((g) => g.status === "completed").length}/${goal.sub_goals?.length || 0} マイルストーン`}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-500">
             {formatInTimeZone(new Date(goal.end_date), timezone, "yyyy年M月d日", { locale: ja })}
           </p>
-          {goal.type === "quantitative" && (goal.sub_goals?.length || 0) > 0 && (
+          {(goal.metric || (goal.sub_goals?.length || 0) > 0) && (
             <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
               <div
                 className="bg-blue-600 h-2.5 rounded-full"
@@ -372,8 +406,7 @@ export default function GoalsPage() {
             setNewGoal({
               title: "",
               description: "",
-              type: "quantitative",
-              metric: { target: 0, unit: "", current: 0 },
+              metric: null,
               smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
               fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
               status: "active",
@@ -410,34 +443,23 @@ export default function GoalsPage() {
               placeholder="目標の説明"
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             />
-            <select
-              value={newGoal.type}
-              onChange={(e) =>
-                setNewGoal({
-                  ...newGoal,
-                  type: e.target.value as "quantitative" | "qualitative",
-                  metric: e.target.value === "quantitative" ? { target: 0, unit: "", current: newGoal.metric?.current || 0 } : { milestones: [] },
-                })
-              }
-              className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-            >
-              <option value="quantitative">定量目標</option>
-              <option value="qualitative">定性目標</option>
-            </select>
-            {newGoal.type === "quantitative" ? (
-              <>
-                <input
-                  type="number"
-                  value={newGoal.metric?.target || 0}
-                  onChange={(e) =>
-                    setNewGoal({
-                      ...newGoal,
-                      metric: { ...newGoal.metric, target: parseInt(e.target.value) },
-                    })
-                  }
-                  placeholder="目標値"
-                  className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-                />
+            <div className="mb-4">
+              <label className="block text-sm dark:text-gray-300 mb-1">定量目標</label>
+              <input
+                type="number"
+                value={newGoal.metric?.target || ""}
+                onChange={(e) =>
+                  setNewGoal({
+                    ...newGoal,
+                    metric: e.target.value
+                      ? { ...newGoal.metric, target: parseInt(e.target.value), current: newGoal.metric?.current || 0 }
+                      : null,
+                  })
+                }
+                placeholder="目標値 (空で定性目標)"
+                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
+              />
+              {newGoal.metric && (
                 <input
                   type="text"
                   value={newGoal.metric?.unit || ""}
@@ -448,23 +470,10 @@ export default function GoalsPage() {
                     })
                   }
                   placeholder="単位"
-                  className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
+                  className="w-full p-2 mt-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
                 />
-              </>
-            ) : (
-              <input
-                type="text"
-                value={newGoal.metric?.milestones?.join(", ") || ""}
-                onChange={(e) =>
-                  setNewGoal({
-                    ...newGoal,
-                    metric: { milestones: e.target.value.split(",").map((s) => s.trim()) },
-                  })
-                }
-                placeholder="マイルストーン (カンマ区切り)"
-                className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-              />
-            )}
+              )}
+            </div>
             <input
               type="date"
               value={newGoal.end_date ? formatInTimeZone(new Date(newGoal.end_date), timezone, "yyyy-MM-dd") : ""}
@@ -495,8 +504,7 @@ export default function GoalsPage() {
                   setNewGoal({
                     title: "",
                     description: "",
-                    type: "quantitative",
-                    metric: { target: 0, unit: "", current: 0 },
+                    metric: null,
                     smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
                     fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
                     status: "active",
@@ -525,12 +533,12 @@ export default function GoalsPage() {
             <p className="text-sm dark:text-gray-300 mb-4">{selectedGoal.description}</p>
             <div className="mb-4">
               <h3 className="text-base font-medium dark:text-gray-100">進捗</h3>
-              {selectedGoal.type === "quantitative" && (
+              {(selectedGoal.metric || (selectedGoal.sub_goals?.length || 0) > 0) && (
                 <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
                   <div
                     className="bg-blue-600 h-2.5 rounded-full"
                     style={{
-                      width: `${((selectedGoal.metric.current || 0) / (selectedGoal.metric.target || 1)) * 100}%`,
+                      width: `${calculateAggregatedProgress(selectedGoal)}%`,
                     }}
                   ></div>
                 </div>
@@ -559,22 +567,21 @@ export default function GoalsPage() {
                 <option value="act">改善</option>
               </select>
               <input
-                type={selectedGoal.type === "quantitative" ? "number" : "text"}
+                type={selectedGoal.metric ? "number" : "text"}
                 value={
-                  selectedGoal.type === "quantitative"
+                  selectedGoal.metric
                     ? (newProgress.progress?.value || "")
                     : (newProgress.progress?.milestone || "")
                 }
                 onChange={(e) =>
                   setNewProgress({
                     ...newProgress,
-                    progress:
-                      selectedGoal.type === "quantitative"
-                        ? { value: parseInt(e.target.value) }
-                        : { milestone: e.target.value },
+                    progress: selectedGoal.metric
+                      ? { value: parseInt(e.target.value) }
+                      : { milestone: e.target.value },
                   })
                 }
-                placeholder={selectedGoal.type === "quantitative" ? "進捗値" : "マイルストーン"}
+                placeholder={selectedGoal.metric ? "進捗値" : "マイルストーン"}
                 className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
               />
               <textarea
@@ -590,19 +597,51 @@ export default function GoalsPage() {
                 進捗を追加
               </button>
             </div>
+            {!selectedGoal.metric && (
+              <div className="mb-4">
+                <h3 className="text-base font-medium dark:text-gray-100">マイルストーン追加</h3>
+                <input
+                  type="text"
+                  value={newSubGoalTitle}
+                  onChange={(e) => setNewSubGoalTitle(e.target.value)}
+                  placeholder="マイルストーンのタイトル"
+                  className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
+                />
+                <button
+                  onClick={() => handleAddSubGoal(selectedGoal.id)}
+                  className="w-full p-2 bg-green-500 text-white rounded-lg dark:bg-green-600"
+                >
+                  マイルストーンを追加
+                </button>
+              </div>
+            )}
             <div className="mb-4">
-              <h3 className="text-base font-medium dark:text-gray-100">小目標</h3>
+              <h3 className="text-base font-medium dark:text-gray-100">マイルストーン</h3>
               <ul className="mt-2 space-y-2">
                 {(selectedGoal.sub_goals || []).map((subGoal) => (
                   <li
                     key={subGoal.id}
-                    className="text-sm dark:text-gray-300 cursor-pointer"
+                    className="text-sm dark:text-gray-300 cursor-pointer flex justify-between items-center"
                     onClick={() => handleGoalClick(subGoal)}
                   >
-                    {subGoal.title} (
-                    {subGoal.type === "quantitative"
-                      ? `${subGoal.metric.current || 0}/${subGoal.metric.target || 0} ${subGoal.metric.unit || ""}`
-                      : subGoal.metric.milestones?.join(", ") || ""})
+                    <span>{subGoal.title}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        supabase
+                          .from("goals")
+                          .update({ status: subGoal.status === "completed" ? "active" : "completed" })
+                          .eq("id", subGoal.id)
+                          .then(() => fetchGoals());
+                      }}
+                      className={`text-sm px-2 py-1 rounded-lg ${
+                        subGoal.status === "completed"
+                          ? "bg-gray-500 dark:bg-gray-600"
+                          : "bg-blue-500 dark:bg-blue-600"
+                      } text-white`}
+                    >
+                      {subGoal.status === "completed" ? "未完了" : "完了"}
+                    </button>
                   </li>
                 ))}
               </ul>

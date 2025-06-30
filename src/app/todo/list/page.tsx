@@ -37,8 +37,7 @@ interface Goal {
   id: string;
   title: string;
   description: string;
-  type: "quantitative" | "qualitative";
-  metric: { target?: number; unit?: string; current?: number; milestones?: string[] };
+  metric: { target?: number; unit?: string; current?: number } | null;
   start_date: string;
   end_date: string;
   smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
@@ -302,7 +301,7 @@ export default function TodoListPage() {
             .eq("user_id", user.id)
             .single();
 
-          if (goal?.type === "quantitative") {
+          if (goal?.metric) {
             await supabase
               .from("goals")
               .update({
@@ -311,6 +310,13 @@ export default function TodoListPage() {
                   current: (goal.metric.current || 0) + 1,
                 },
               })
+              .eq("id", goal.id)
+              .eq("user_id", user.id);
+          } else {
+            // Mark the goal as completed if it's a milestone
+            await supabase
+              .from("goals")
+              .update({ status: "completed" })
               .eq("id", goal.id)
               .eq("user_id", user.id);
           }
