@@ -820,5 +820,5 @@ This document tracks changes to the database schema for the NBRCD app.
   - Visual indicators for quantitative vs. qualitative goals in the UI.
   - Validation for sub-goal creation to prevent excessive milestones.
   - Enhanced progress tracking for qualitative goals with weighted milestones.
-(#)
+(#ea483ad)
 
