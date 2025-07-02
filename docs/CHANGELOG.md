@@ -853,4 +853,4 @@ This document tracks changes to the database schema for the NBRCD app.
   - Validation for sub-goal (milestone) count in qualitative goals.
   - Explicit linking of diary entries to goals for stronger "Act" phase support.
   - Visual indicators for quantitative vs. qualitative goals in the UI.
-(#)
+(#39a9f93)
