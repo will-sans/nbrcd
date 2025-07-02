@@ -822,3 +822,35 @@ This document tracks changes to the database schema for the NBRCD app.
   - Enhanced progress tracking for qualitative goals with weighted milestones.
 (#ea483ad)
 
+## [1.7.0] - 2025-07-03
+
+### Added
+- **PDCA Integration with Existing Features**:
+  - Implemented PDCA (Plan-Do-Check-Act) cycle using existing pages:
+    - **Plan**: Create tasks linked to goals or sub-goals in `src/app/todo/list/page.tsx`.
+    - **Do**: Mark tasks as completed in `src/app/todo/list/page.tsx`, updating goal progress.
+    - **Check**: Review completed tasks in `src/app/todo/completed/page.tsx`.
+    - **Act**: Reflect and plan improvements via diary entries in the `diary` page.
+  - Removed `goal_progress` table and PDCA modal section from `src/app/goals/page.tsx` to simplify the data model and UI.
+
+### Changed
+- Updated `src/app/goals/page.tsx`:
+  - Removed `Progress` interface, `progressEntries` state, `fetchProgress`, and `handleAddProgress` functions.
+  - Removed PDCA update section from the goal details modal, retaining progress display, sub-goal creation, and milestone toggles.
+  - Updated deletion confirmation prompt to remove mention of progress entries.
+- SQL for schema update:
+  ```sql
+  DROP TABLE IF EXISTS goal_progress;
+  ```
+
+### Fixed
+- Ensured seamless integration of PDCA cycle with tasks and diary, maintaining goal progress tracking for both quantitative (`metric`) and qualitative (sub-goal completion) goals.
+- Maintained UI consistency across light and dark modes after removing PDCA modal section.
+
+### Notes
+- The simplified data model eliminates the need for a separate `goal_progress` table, reducing complexity while leveraging existing task and diary functionality.
+- Future improvements may include:
+  - Validation for sub-goal (milestone) count in qualitative goals.
+  - Explicit linking of diary entries to goals for stronger "Act" phase support.
+  - Visual indicators for quantitative vs. qualitative goals in the UI.
+(#)

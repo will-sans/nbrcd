@@ -24,22 +24,12 @@ interface Goal {
   created_at: string;
 }
 
-interface Progress {
-  id: string;
-  goal_id: string;
-  pdca_phase: "plan" | "do" | "check" | "act";
-  notes: string;
-  progress: { value?: number; milestone?: string };
-  created_at: string;
-}
-
 export default function GoalsPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
   const { timezone } = useTimezone();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
-  const [progressEntries, setProgressEntries] = useState<Progress[]>([]);
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: "",
     description: "",
@@ -48,11 +38,6 @@ export default function GoalsPage() {
     fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
     status: "active",
     parent_goal_id: undefined,
-  });
-  const [newProgress, setNewProgress] = useState<Partial<Progress>>({
-    pdca_phase: "plan",
-    notes: "",
-    progress: {},
   });
   const [newSubGoalTitle, setNewSubGoalTitle] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,25 +85,6 @@ export default function GoalsPage() {
 
     setGoals(topLevelGoals);
   }, [supabase, router]);
-
-  const fetchProgress = useCallback(async (goalId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from("goal_progress")
-      .select("*")
-      .eq("goal_id", goalId)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch progress:", error);
-      return;
-    }
-
-    setProgressEntries(data || []);
-  }, [supabase]);
 
   useEffect(() => {
     fetchGoals();
@@ -201,28 +167,6 @@ export default function GoalsPage() {
     fetchGoals();
   };
 
-  const handleAddProgress = async (goalId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const progressData = {
-      id: uuidv4(),
-      goal_id: goalId,
-      user_id: user.id,
-      ...newProgress,
-      created_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase.from("goal_progress").insert(progressData);
-    if (error) {
-      console.error("Failed to add progress:", error);
-      return;
-    }
-
-    setNewProgress({ pdca_phase: "plan", notes: "", progress: {} });
-    fetchProgress(goalId);
-  };
-
   const handleAddSubGoal = async (parentGoalId: string) => {
     if (!newSubGoalTitle.trim()) return;
 
@@ -265,7 +209,7 @@ export default function GoalsPage() {
       return;
     }
 
-    if (!confirm("この目標と関連するサブ目標、タスク、進捗を削除しますか？")) {
+    if (!confirm("この目標と関連するサブ目標、タスクを削除しますか？")) {
       return;
     }
 
@@ -289,7 +233,6 @@ export default function GoalsPage() {
 
   const handleGoalClick = (goal: Goal) => {
     setSelectedGoal(goal);
-    fetchProgress(goal.id);
   };
 
   const openModifyModal = (goal: Goal) => {
@@ -543,59 +486,6 @@ export default function GoalsPage() {
                   ></div>
                 </div>
               )}
-              <ul className="mt-2 space-y-2">
-                {progressEntries.map((entry) => (
-                  <li key={entry.id} className="text-sm dark:text-gray-300">
-                    {entry.pdca_phase}: {entry.notes} (
-                    {entry.progress.value || entry.progress.milestone})
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="mb-4">
-              <h3 className="text-base font-medium dark:text-gray-100">PDCA更新</h3>
-              <select
-                value={newProgress.pdca_phase}
-                onChange={(e) =>
-                  setNewProgress({ ...newProgress, pdca_phase: e.target.value as Progress["pdca_phase"] })
-                }
-                className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-              >
-                <option value="plan">計画</option>
-                <option value="do">実行</option>
-                <option value="check">確認</option>
-                <option value="act">改善</option>
-              </select>
-              <input
-                type={selectedGoal.metric ? "number" : "text"}
-                value={
-                  selectedGoal.metric
-                    ? (newProgress.progress?.value || "")
-                    : (newProgress.progress?.milestone || "")
-                }
-                onChange={(e) =>
-                  setNewProgress({
-                    ...newProgress,
-                    progress: selectedGoal.metric
-                      ? { value: parseInt(e.target.value) }
-                      : { milestone: e.target.value },
-                  })
-                }
-                placeholder={selectedGoal.metric ? "進捗値" : "マイルストーン"}
-                className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-              />
-              <textarea
-                value={newProgress.notes}
-                onChange={(e) => setNewProgress({ ...newProgress, notes: e.target.value })}
-                placeholder="メモ"
-                className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-              ></textarea>
-              <button
-                onClick={() => handleAddProgress(selectedGoal.id)}
-                className="w-full p-2 bg-blue-500 text-white rounded-lg dark:bg-blue-600"
-              >
-                進捗を追加
-              </button>
             </div>
             {!selectedGoal.metric && (
               <div className="mb-4">
