@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
-import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash, FaEdit } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash, FaEdit, FaUndo } from "react-icons/fa";
 import { formatInTimeZone } from "date-fns-tz";
 import { ja } from "date-fns/locale";
 import { useTimezone } from "@/lib/timezone-context";
@@ -28,7 +28,8 @@ export default function GoalsPage() {
   const router = useRouter();
   const supabase = getSupabaseClient();
   const { timezone } = useTimezone();
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
+  const [completedGoals, setCompletedGoals] = useState<Goal[]>([]);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: "",
@@ -55,7 +56,7 @@ export default function GoalsPage() {
       .from("goals")
       .select("*")
       .eq("user_id", user.id)
-      .eq("status", "active")
+      .in("status", ["active", "completed"])
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -63,9 +64,10 @@ export default function GoalsPage() {
       return;
     }
 
-    // Build hierarchical structure
+    // Build hierarchical structure for active and completed goals
     const goalMap = new Map<string, Goal>();
-    const topLevelGoals: Goal[] = [];
+    const activeTopLevelGoals: Goal[] = [];
+    const completedTopLevelGoals: Goal[] = [];
 
     (data || []).forEach((goal) => {
       goalMap.set(goal.id, { ...goal, sub_goals: [] });
@@ -79,11 +81,16 @@ export default function GoalsPage() {
           parent.sub_goals.push(goal);
         }
       } else {
-        topLevelGoals.push(goal);
+        if (goal.status === "active") {
+          activeTopLevelGoals.push(goal);
+        } else if (goal.status === "completed") {
+          completedTopLevelGoals.push(goal);
+        }
       }
     });
 
-    setGoals(topLevelGoals);
+    setActiveGoals(activeTopLevelGoals);
+    setCompletedGoals(completedTopLevelGoals);
   }, [supabase, router]);
 
   useEffect(() => {
@@ -231,6 +238,31 @@ export default function GoalsPage() {
     }
   };
 
+  const handleRestoreGoal = async (goalId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("goals")
+        .update({ status: "active" })
+        .eq("id", goalId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "目標の復元に失敗しました");
+      }
+
+      setSelectedGoal(null);
+      fetchGoals();
+    } catch (err) {
+      console.error("Failed to restore goal:", err);
+    }
+  };
+
   const handleGoalClick = (goal: Goal) => {
     setSelectedGoal(goal);
   };
@@ -364,7 +396,19 @@ export default function GoalsPage() {
       </div>
 
       <div className="space-y-4">
-        {goals.map((goal) => renderGoal(goal))}
+        <h2 className="text-base font-medium dark:text-gray-100">アクティブな目標</h2>
+        {activeGoals.map((goal) => renderGoal(goal))}
+        {activeGoals.length === 0 && (
+          <p className="text-gray-500 text-center text-sm dark:text-gray-400">アクティブな目標がありません。</p>
+        )}
+      </div>
+
+      <div className="space-y-4 mt-8">
+        <h2 className="text-base font-medium dark:text-gray-100">完了済み目標</h2>
+        {completedGoals.map((goal) => renderGoal(goal))}
+        {completedGoals.length === 0 && (
+          <p className="text-gray-500 text-center text-sm dark:text-gray-400">完了済み目標がありません。</p>
+        )}
       </div>
 
       {isModalOpen && (
@@ -433,7 +477,7 @@ export default function GoalsPage() {
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             >
               <option value="">親目標なし</option>
-              {flattenGoals(goals).filter((goal) => goal.id !== selectedGoal?.id).map((goal) => (
+              {flattenGoals(activeGoals).filter((goal) => goal.id !== selectedGoal?.id).map((goal) => (
                 <option key={goal.id} value={goal.id}>
                   {goal.title}
                 </option>
@@ -537,20 +581,32 @@ export default function GoalsPage() {
               </ul>
             </div>
             <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => openModifyModal(selectedGoal)}
-                className="bg-yellow-500 text-white px-4 py-2 rounded-lg dark:bg-yellow-600 dark:hover:bg-yellow-700"
-                aria-label="目標を修正"
-              >
-                <FaEdit className="inline mr-2" /> 修正
-              </button>
-              <button
-                onClick={() => handleDeleteGoal(selectedGoal.id)}
-                className="bg-red-500 text-white px-4 py-2 rounded-lg dark:bg-red-600 dark:hover:bg-red-700"
-                aria-label="目標を削除"
-              >
-                <FaTrash className="inline mr-2" /> 削除
-              </button>
+              {selectedGoal.status === "completed" ? (
+                <button
+                  onClick={() => handleRestoreGoal(selectedGoal.id)}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-lg dark:bg-blue-600 dark:hover:bg-blue-700"
+                  aria-label="目標を復元"
+                >
+                  <FaUndo className="inline mr-2" /> 復元
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => openModifyModal(selectedGoal)}
+                    className="bg-yellow-500 text-white px-4 py-2 rounded-lg dark:bg-yellow-600 dark:hover:bg-yellow-700"
+                    aria-label="目標を修正"
+                  >
+                    <FaEdit className="inline mr-2" /> 修正
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGoal(selectedGoal.id)}
+                    className="bg-red-500 text-white px-4 py-2 rounded-lg dark:bg-red-600 dark:hover:bg-red-700"
+                    aria-label="目標を削除"
+                  >
+                    <FaTrash className="inline mr-2" /> 削除
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setSelectedGoal(null)}
                 className="bg-gray-500 text-white px-4 py-2 rounded-lg dark:bg-gray-700"

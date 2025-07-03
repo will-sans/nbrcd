@@ -21,7 +21,10 @@ interface Todo {
 interface Goal {
   id: string;
   title: string;
+  metric: { target?: number; unit?: string; current?: number } | null;
+  status: "active" | "completed" | "archived";
   parent_goal_id?: string;
+  sub_goals?: Goal[];
 }
 
 interface GroupedTodos {
@@ -69,9 +72,9 @@ export default function CompletedTodoPage() {
 
         const { data: goalsData, error: goalsError } = await supabase
           .from("goals")
-          .select("id, title, parent_goal_id")
+          .select("id, title, metric, status, parent_goal_id")
           .eq("user_id", user.id)
-          .eq("status", "active");
+          .in("status", ["active", "completed"]);
 
         if (goalsError) {
           console.error("Failed to fetch goals:", goalsError);
@@ -150,6 +153,8 @@ export default function CompletedTodoPage() {
       return;
     }
 
+    const todo = completedTodos.find((t) => t.id === id);
+
     try {
       const { error } = await supabase
         .from("todos")
@@ -162,6 +167,44 @@ export default function CompletedTodoPage() {
 
       if (error) {
         throw new Error(error.message || "タスクの復元に失敗しました");
+      }
+
+      if (todo?.goal_id) {
+        const updateGoalProgress = async (goalId: string) => {
+          const { data: goal } = await supabase
+            .from("goals")
+            .select("*")
+            .eq("id", goalId)
+            .eq("user_id", user.id)
+            .single();
+
+          if (goal?.metric) {
+            const newCurrent = Math.max(0, (goal.metric.current || 0) - 1);
+            await supabase
+              .from("goals")
+              .update({
+                metric: {
+                  ...goal.metric,
+                  current: newCurrent,
+                },
+                status: newCurrent > 0 || (goal.sub_goals?.some((sg: Goal) => sg.status === "completed") ?? false) ? goal.status : "active",
+              })
+              .eq("id", goal.id)
+              .eq("user_id", user.id);
+          } else {
+            await supabase
+              .from("goals")
+              .update({ status: "active" })
+              .eq("id", goal.id)
+              .eq("user_id", user.id);
+          }
+
+          if (goal?.parent_goal_id) {
+            await updateGoalProgress(goal.parent_goal_id);
+          }
+        };
+
+        await updateGoalProgress(todo.goal_id);
       }
     } catch (err) {
       console.error("Failed to restore task:", err);

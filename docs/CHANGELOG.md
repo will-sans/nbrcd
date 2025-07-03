@@ -854,3 +854,42 @@ This document tracks changes to the database schema for the NBRCD app.
   - Explicit linking of diary entries to goals for stronger "Act" phase support.
   - Visual indicators for quantitative vs. qualitative goals in the UI.
 (#39a9f93)
+
+## [1.8.0] - 2025-07-03
+
+### Added
+- **Completed Goals Display and Restoration**:
+  - Added display of completed goals (`status: "completed"`) in a separate "完了済み目標" section at the bottom of `src/app/goals/page.tsx`.
+  - Added "復元" button with `FaUndo` icon in the goal details modal for completed goals, allowing reversion to `status: "active"`.
+  - Implemented `handleRestoreGoal` function in `src/app/goals/page.tsx` to update goal status and refresh the goal list.
+- **Task Restoration with Progress Updates**:
+  - Updated `handleRestoreTodo` in `src/app/todo/completed/page.tsx` to:
+    - Decrement `metric.current` for quantitative goals when tasks are restored, ensuring it doesn't go below 0.
+    - Revert `status` to `"active"` for qualitative goals (milestones) and parent goals if no tasks or sub-goals remain completed.
+  - Added recursive status updates for parent goals in `handleRestoreTodo`.
+
+### Changed
+- Updated `src/app/goals/page.tsx`:
+  - Modified `fetchGoals` to fetch both `active` and `completed` goals, separating them into `activeGoals` and `completedGoals` states.
+  - Added "アクティブな目標" and "完了済み目標" sections for rendering goals.
+  - Updated goal details modal to show "復元" for completed goals and "修正"/"削除" for active goals.
+  - Restricted parent goal dropdown to active goals only.
+- Updated `src/app/todo/completed/page.tsx`:
+  - Enhanced `fetchCompletedTodos` to include `metric` and `status` in goal data for progress updates.
+  - Modified `handleRestoreTodo` to handle progress decrements and status updates.
+
+### Fixed
+- Resolved TypeScript error in `src/app/todo/completed/page.tsx` by explicitly typing the `sg` parameter as `Goal` in the `sub_goals?.some` callback in `handleRestoreTodo`.
+- Resolved TypeScript errors in `src/app/todo/list/page.tsx`:
+  - Added missing `groupedTodos` and `sortedGroupedTodos` logic to group and sort tasks by date, priority, and creation date.
+  - Explicitly typed the `todo` parameter as `Todo` in the rendering `map` callback to avoid implicit `any`.
+- Ensured goal status reverts to `"active"` correctly when tasks are restored and no tasks/sub-goals remain completed.
+- Maintained UI consistency for completed goals and tasks across light and dark modes.
+
+### Notes
+- No database schema changes were required, as the `goals` table already supports `status` and nullable `metric`.
+- The PDCA cycle remains integrated via tasks (Plan/Do), completed tasks (Check), and diary entries (Act).
+- Future improvements may include:
+  - Validation to prevent restoring goals/tasks with dependent work logs.
+  - Visual indicators for quantitative vs. qualitative goals in the UI.
+  - Enhanced diary integration for explicit goal linking in the "Act" phase.

@@ -473,7 +473,7 @@ export default function TodoListPage() {
     }
   };
 
-  const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo) => {
+  const groupedTodos = todos.reduce((acc: { [key: string]: Todo[] }, todo: Todo) => {
     const dateObj = todo.dueDate ? new Date(todo.dueDate) : new Date(todo.date);
     const zonedDate = toZonedTime(dateObj, timezone);
     const dateKey = formatInTimeZone(zonedDate, timezone, "yyyy年M月d日 (EEE)", { locale: ja });
@@ -489,7 +489,7 @@ export default function TodoListPage() {
       return dateA.getTime() - dateB.getTime();
     })
     .reduce((acc: { [key: string]: Todo[] }, dateKey) => {
-      acc[dateKey] = groupedTodos[dateKey].sort((a, b) => {
+      acc[dateKey] = groupedTodos[dateKey].sort((a: Todo, b: Todo) => {
         if (a.priority !== b.priority) {
           return b.priority - a.priority;
         }
@@ -582,7 +582,7 @@ export default function TodoListPage() {
           <div key={date} className="mb-4">
             <h2 className="text-base font-medium mb-2 dark:text-gray-100">{date}</h2>
             <ul className="space-y-3">
-              {sortedGroupedTodos[date].map((todo) => (
+              {sortedGroupedTodos[date].map((todo: Todo) => (
                 <li key={todo.id} className="relative">
                   <div
                     className="p-3 bg-gray-100 rounded-lg dark:bg-gray-800 overflow-hidden"
