@@ -978,4 +978,4 @@ This document tracks changes to the database schema for the NBRCD app.
   - Validation for sub-goal/task count limits.
   - Explicit linking of diary entries to goals for the "Act" phase.
   - Visual indicators for goal hierarchy depth.
-(#)
+(#b90ab3a)
