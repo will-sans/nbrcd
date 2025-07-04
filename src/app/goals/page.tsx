@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
-import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash, FaEdit, FaUndo } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaChevronDown, FaChevronRight, FaTrash, FaEdit, FaUndo, FaCheckCircle } from "react-icons/fa";
 import { formatInTimeZone } from "date-fns-tz";
 import { ja } from "date-fns/locale";
 import { useTimezone } from "@/lib/timezone-context";
@@ -13,15 +13,18 @@ interface Goal {
   id: string;
   title: string;
   description: string;
-  metric: { target?: number; unit?: string; current?: number } | null;
-  start_date: string;
-  end_date: string;
-  smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
-  fast: { frequently_discussed: string; ambitious: string; specific: string; transparent: string };
   status: "active" | "completed" | "archived";
   parent_goal_id?: string;
   sub_goals?: Goal[];
+  start_date: string;
+  end_date: string;
   created_at: string;
+}
+
+interface ProgressData {
+  goal_id: string;
+  total_items: number;
+  completed_items: number;
 }
 
 export default function GoalsPage() {
@@ -30,13 +33,11 @@ export default function GoalsPage() {
   const { timezone } = useTimezone();
   const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
   const [completedGoals, setCompletedGoals] = useState<Goal[]>([]);
+  const [progressData, setProgressData] = useState<Map<string, ProgressData>>(new Map());
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [newGoal, setNewGoal] = useState<Partial<Goal>>({
     title: "",
     description: "",
-    metric: null,
-    smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
-    fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
     status: "active",
     parent_goal_id: undefined,
   });
@@ -45,31 +46,32 @@ export default function GoalsPage() {
   const [modalMode, setModalMode] = useState<"create" | "modify">("create");
   const [expandedGoals, setExpandedGoals] = useState<Set<string>>(new Set());
 
-  const fetchGoals = useCallback(async () => {
+  const fetchGoalsAndProgress = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push("/login");
       return;
     }
 
-    const { data, error } = await supabase
+    // Fetch goals
+    const { data: goalsData, error: goalsError } = await supabase
       .from("goals")
       .select("*")
       .eq("user_id", user.id)
       .in("status", ["active", "completed"])
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Failed to fetch goals:", error);
+    if (goalsError) {
+      console.error("Failed to fetch goals:", goalsError);
       return;
     }
 
-    // Build hierarchical structure for active and completed goals
+    // Build hierarchical structure
     const goalMap = new Map<string, Goal>();
     const activeTopLevelGoals: Goal[] = [];
     const completedTopLevelGoals: Goal[] = [];
 
-    (data || []).forEach((goal) => {
+    (goalsData || []).forEach((goal) => {
       goalMap.set(goal.id, { ...goal, sub_goals: [] });
     });
 
@@ -91,11 +93,25 @@ export default function GoalsPage() {
 
     setActiveGoals(activeTopLevelGoals);
     setCompletedGoals(completedTopLevelGoals);
+
+    // Fetch progress data
+    const { data: progressDataRaw, error: progressError } = await supabase.rpc("get_goal_progress", { user_id: user.id });
+
+    if (progressError) {
+      console.error("Failed to fetch progress data:", progressError);
+      return;
+    }
+
+    const progressMap = new Map<string, ProgressData>();
+    (progressDataRaw || []).forEach((data: ProgressData) => {
+      progressMap.set(data.goal_id, data);
+    });
+    setProgressData(progressMap);
   }, [supabase, router]);
 
   useEffect(() => {
-    fetchGoals();
-  }, [fetchGoals]);
+    fetchGoalsAndProgress();
+  }, [fetchGoalsAndProgress]);
 
   const handleCreateGoal = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -123,15 +139,12 @@ export default function GoalsPage() {
     setNewGoal({
       title: "",
       description: "",
-      metric: null,
-      smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
-      fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
       status: "active",
       parent_goal_id: undefined,
     });
     setIsModalOpen(false);
     setModalMode("create");
-    fetchGoals();
+    fetchGoalsAndProgress();
   };
 
   const handleModifyGoal = async () => {
@@ -162,16 +175,13 @@ export default function GoalsPage() {
     setNewGoal({
       title: "",
       description: "",
-      metric: null,
-      smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
-      fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
       status: "active",
       parent_goal_id: undefined,
     });
     setIsModalOpen(false);
     setModalMode("create");
     setSelectedGoal(null);
-    fetchGoals();
+    fetchGoalsAndProgress();
   };
 
   const handleAddSubGoal = async (parentGoalId: string) => {
@@ -188,13 +198,10 @@ export default function GoalsPage() {
       user_id: user.id,
       title: newSubGoalTitle,
       description: "",
-      metric: null,
-      start_date: new Date().toISOString(),
-      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
-      fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
       status: "active",
       parent_goal_id: parentGoalId,
+      start_date: new Date().toISOString(),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -206,7 +213,7 @@ export default function GoalsPage() {
     }
 
     setNewSubGoalTitle("");
-    fetchGoals();
+    fetchGoalsAndProgress();
   };
 
   const handleDeleteGoal = async (goalId: string) => {
@@ -232,34 +239,41 @@ export default function GoalsPage() {
       }
 
       setSelectedGoal(null);
-      fetchGoals();
+      fetchGoalsAndProgress();
     } catch (err) {
       console.error("Failed to delete goal:", err);
     }
   };
 
-  const handleRestoreGoal = async (goalId: string) => {
+  const handleToggleGoalStatus = async (goalId: string, currentStatus: "active" | "completed" | "archived") => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push("/login");
       return;
     }
 
+    if (currentStatus === "archived") {
+      alert("アーカイブされた目標の状態は変更できません。");
+      return;
+    }
+
+    const newStatus = currentStatus === "active" ? "completed" : "active";
+
     try {
       const { error } = await supabase
         .from("goals")
-        .update({ status: "active" })
+        .update({ status: newStatus })
         .eq("id", goalId)
         .eq("user_id", user.id);
 
       if (error) {
-        throw new Error(error.message || "目標の復元に失敗しました");
+        throw new Error(error.message || `目標の${newStatus === "active" ? "復元" : "完了"}に失敗しました`);
       }
 
       setSelectedGoal(null);
-      fetchGoals();
+      fetchGoalsAndProgress();
     } catch (err) {
-      console.error("Failed to restore goal:", err);
+      console.error(`Failed to ${newStatus === "active" ? "restore" : "complete"} goal:`, err);
     }
   };
 
@@ -271,10 +285,6 @@ export default function GoalsPage() {
     setNewGoal({
       title: goal.title,
       description: goal.description,
-      metric: goal.metric,
-      end_date: goal.end_date,
-      smart: goal.smart,
-      fast: goal.fast,
       status: goal.status,
       parent_goal_id: goal.parent_goal_id,
     });
@@ -294,22 +304,10 @@ export default function GoalsPage() {
     });
   };
 
-  const calculateAggregatedProgress = (goal: Goal): number => {
-    if (goal.metric) {
-      let totalCurrent = goal.metric.current || 0;
-      let totalTarget = goal.metric.target || 1;
-      (goal.sub_goals || []).forEach((subGoal) => {
-        if (subGoal.metric) {
-          totalCurrent += subGoal.metric.current || 0;
-          totalTarget += subGoal.metric.target || 0;
-        }
-      });
-      return (totalCurrent / totalTarget) * 100;
-    } else {
-      const subGoals = goal.sub_goals || [];
-      const completedSubGoals = subGoals.filter((subGoal) => subGoal.status === "completed").length;
-      return subGoals.length > 0 ? (completedSubGoals / subGoals.length) * 100 : 0;
-    }
+  const calculateProgress = (goalId: string): number => {
+    const data = progressData.get(goalId);
+    if (!data || data.total_items === 0) return 0;
+    return (data.completed_items / data.total_items) * 100;
   };
 
   const flattenGoals = (goals: Goal[], depth: number = 0, parentTitles: string[] = []): { id: string; title: string }[] => {
@@ -344,21 +342,17 @@ export default function GoalsPage() {
         <div className="flex-1">
           <h2 className="text-base font-medium dark:text-gray-100">{goal.title}</h2>
           <p className="text-sm dark:text-gray-300">
-            {goal.metric
-              ? `${goal.metric.current || 0}/${goal.metric.target || 0} ${goal.metric.unit || ""}`
-              : `${(goal.sub_goals || []).filter((g) => g.status === "completed").length}/${goal.sub_goals?.length || 0} マイルストーン`}
+            進捗: {progressData.get(goal.id)?.completed_items || 0}/{progressData.get(goal.id)?.total_items || 0}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-500">
             {formatInTimeZone(new Date(goal.end_date), timezone, "yyyy年M月d日", { locale: ja })}
           </p>
-          {(goal.metric || (goal.sub_goals?.length || 0) > 0) && (
-            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
-              <div
-                className="bg-blue-600 h-2.5 rounded-full"
-                style={{ width: `${calculateAggregatedProgress(goal)}%` }}
-              ></div>
-            </div>
-          )}
+          <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
+            <div
+              className="bg-blue-600 h-2.5 rounded-full"
+              style={{ width: `${calculateProgress(goal.id)}%` }}
+            ></div>
+          </div>
         </div>
       </div>
       {expandedGoals.has(goal.id) && goal.sub_goals?.map((subGoal) => renderGoal(subGoal, depth + 1))}
@@ -381,9 +375,6 @@ export default function GoalsPage() {
             setNewGoal({
               title: "",
               description: "",
-              metric: null,
-              smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
-              fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
               status: "active",
               parent_goal_id: undefined,
             });
@@ -430,37 +421,6 @@ export default function GoalsPage() {
               placeholder="目標の説明"
               className="w-full p-2 mb-4 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
             />
-            <div className="mb-4">
-              <label className="block text-sm dark:text-gray-300 mb-1">定量目標</label>
-              <input
-                type="number"
-                value={newGoal.metric?.target || ""}
-                onChange={(e) =>
-                  setNewGoal({
-                    ...newGoal,
-                    metric: e.target.value
-                      ? { ...newGoal.metric, target: parseInt(e.target.value), current: newGoal.metric?.current || 0 }
-                      : null,
-                  })
-                }
-                placeholder="目標値 (空で定性目標)"
-                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-              />
-              {newGoal.metric && (
-                <input
-                  type="text"
-                  value={newGoal.metric?.unit || ""}
-                  onChange={(e) =>
-                    setNewGoal({
-                      ...newGoal,
-                      metric: { ...newGoal.metric, unit: e.target.value },
-                    })
-                  }
-                  placeholder="単位"
-                  className="w-full p-2 mt-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-                />
-              )}
-            </div>
             <input
               type="date"
               value={newGoal.end_date ? formatInTimeZone(new Date(newGoal.end_date), timezone, "yyyy-MM-dd") : ""}
@@ -491,9 +451,6 @@ export default function GoalsPage() {
                   setNewGoal({
                     title: "",
                     description: "",
-                    metric: null,
-                    smart: { specific: "", measurable: "", achievable: "", relevant: "", time_bound: "" },
-                    fast: { frequently_discussed: "", ambitious: "", specific: "", transparent: "" },
                     status: "active",
                     parent_goal_id: undefined,
                   });
@@ -520,37 +477,34 @@ export default function GoalsPage() {
             <p className="text-sm dark:text-gray-300 mb-4">{selectedGoal.description}</p>
             <div className="mb-4">
               <h3 className="text-base font-medium dark:text-gray-100">進捗</h3>
-              {(selectedGoal.metric || (selectedGoal.sub_goals?.length || 0) > 0) && (
-                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                  <div
-                    className="bg-blue-600 h-2.5 rounded-full"
-                    style={{
-                      width: `${calculateAggregatedProgress(selectedGoal)}%`,
-                    }}
-                  ></div>
-                </div>
-              )}
-            </div>
-            {!selectedGoal.metric && (
-              <div className="mb-4">
-                <h3 className="text-base font-medium dark:text-gray-100">マイルストーン追加</h3>
-                <input
-                  type="text"
-                  value={newSubGoalTitle}
-                  onChange={(e) => setNewSubGoalTitle(e.target.value)}
-                  placeholder="マイルストーンのタイトル"
-                  className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
-                />
-                <button
-                  onClick={() => handleAddSubGoal(selectedGoal.id)}
-                  className="w-full p-2 bg-green-500 text-white rounded-lg dark:bg-green-600"
-                >
-                  マイルストーンを追加
-                </button>
+              <p className="text-sm dark:text-gray-300">
+                進捗: {progressData.get(selectedGoal.id)?.completed_items || 0}/{progressData.get(selectedGoal.id)?.total_items || 0}
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full"
+                  style={{ width: `${calculateProgress(selectedGoal.id)}%` }}
+                ></div>
               </div>
-            )}
+            </div>
             <div className="mb-4">
-              <h3 className="text-base font-medium dark:text-gray-100">マイルストーン</h3>
+              <h3 className="text-base font-medium dark:text-gray-100">サブ目標追加</h3>
+              <input
+                type="text"
+                value={newSubGoalTitle}
+                onChange={(e) => setNewSubGoalTitle(e.target.value)}
+                placeholder="サブ目標のタイトル"
+                className="w-full p-2 mb-2 border rounded-lg dark:bg-gray-700 dark:text-gray-100"
+              />
+              <button
+                onClick={() => handleAddSubGoal(selectedGoal.id)}
+                className="w-full p-2 bg-green-500 text-white rounded-lg dark:bg-green-600"
+              >
+                サブ目標を追加
+              </button>
+            </div>
+            <div className="mb-4">
+              <h3 className="text-base font-medium dark:text-gray-100">サブ目標</h3>
               <ul className="mt-2 space-y-2">
                 {(selectedGoal.sub_goals || []).map((subGoal) => (
                   <li
@@ -562,11 +516,7 @@ export default function GoalsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        supabase
-                          .from("goals")
-                          .update({ status: subGoal.status === "completed" ? "active" : "completed" })
-                          .eq("id", subGoal.id)
-                          .then(() => fetchGoals());
+                        handleToggleGoalStatus(subGoal.id, subGoal.status);
                       }}
                       className={`text-sm px-2 py-1 rounded-lg ${
                         subGoal.status === "completed"
@@ -583,7 +533,7 @@ export default function GoalsPage() {
             <div className="flex justify-end space-x-2">
               {selectedGoal.status === "completed" ? (
                 <button
-                  onClick={() => handleRestoreGoal(selectedGoal.id)}
+                  onClick={() => handleToggleGoalStatus(selectedGoal.id, selectedGoal.status)}
                   className="bg-blue-500 text-white px-4 py-2 rounded-lg dark:bg-blue-600 dark:hover:bg-blue-700"
                   aria-label="目標を復元"
                 >
@@ -591,6 +541,13 @@ export default function GoalsPage() {
                 </button>
               ) : (
                 <>
+                  <button
+                    onClick={() => handleToggleGoalStatus(selectedGoal.id, selectedGoal.status)}
+                    className="bg-green-500 text-white px-4 py-2 rounded-lg dark:bg-green-600 dark:hover:bg-green-700"
+                    aria-label="目標を完了"
+                  >
+                    <FaCheckCircle className="inline mr-2" /> 完了
+                  </button>
                   <button
                     onClick={() => openModifyModal(selectedGoal)}
                     className="bg-yellow-500 text-white px-4 py-2 rounded-lg dark:bg-yellow-600 dark:hover:bg-yellow-700"

@@ -893,3 +893,89 @@ This document tracks changes to the database schema for the NBRCD app.
   - Validation to prevent restoring goals/tasks with dependent work logs.
   - Visual indicators for quantitative vs. qualitative goals in the UI.
   - Enhanced diary integration for explicit goal linking in the "Act" phase.
+
+## [1.9.0] - 2025-07-04
+
+### Added
+- **Simplified Goal Management System**:
+  - Removed quantitative/qualitative distinction, allowing both sub-goals (`goals.parent_goal_id`) and tasks (`todos.goal_id`) to be registered under any goal.
+  - Implemented progress tracking based on the total count of completed sub-goals (`goals.status = 'completed'`) and tasks (`todos.completed = true`) relative to their total count, using a Supabase RPC function `get_goal_progress`.
+  - Added user-controlled goal status toggling via "完了" (`FaCheckCircle`) and "復元" (`FaUndo`) buttons in the goal details modal.
+  - SQL for schema update and RPC function:
+    ```sql
+    ALTER TABLE goals
+    DROP COLUMN IF EXISTS metric,
+    DROP COLUMN IF EXISTS smart,
+    DROP COLUMN IF EXISTS fast;
+
+    CREATE OR REPLACE FUNCTION get_goal_progress(user_id uuid)
+    RETURNS TABLE (
+      goal_id uuid,
+      total_items bigint,
+      completed_items bigint
+    ) AS $$
+    BEGIN
+      RETURN QUERY
+      WITH sub_goals AS (
+        SELECT g.id AS goal_id, COUNT(sg.id) AS total_sub_goals, COUNT(sg.id) FILTER (WHERE sg.status = 'completed') AS completed_sub_goals
+        FROM goals g
+        LEFT JOIN goals sg ON sg.parent_goal_id = g.id
+        WHERE g.user_id = $1 AND g.status IN ('active', 'completed')
+        GROUP BY g.id
+      ),
+      tasks AS (
+        SELECT g.id AS goal_id, COUNT(t.id) AS total_tasks, COUNT(t.id) FILTER (WHERE t.completed = true) AS completed_tasks
+        FROM goals g
+        LEFT JOIN todos t ON t.goal_id = g.id
+        WHERE g.user_id = $1 AND g.status IN ('active', 'completed')
+        GROUP BY g.id
+      )
+      SELECT
+        g.id AS goal_id,
+        COALESCE(sg.total_sub_goals, 0) + COALESCE(t.total_tasks, 0) AS total_items,
+        COALESCE(sg.completed_sub_goals, 0) + COALESCE(t.completed_tasks, 0) AS completed_items
+      FROM goals g
+      LEFT JOIN sub_goals sg ON sg.goal_id = g.id
+      LEFT JOIN tasks t ON t.goal_id = g.id
+      WHERE g.user_id = $1 AND g.status IN ('active', 'completed');
+    END;
+    $$ LANGUAGE plpgsql;
+    ```
+
+### Changed
+- Updated `src/app/goals/page.tsx`:
+  - Removed `metric`, `smart`, and `fast` from the `Goal` interface and creation/modification modal.
+  - Added `ProgressData` interface and `progressData` state to store total and completed sub-goals/tasks.
+  - Implemented `fetchGoalsAndProgress` to fetch goals and progress via `get_goal_progress`.
+  - Updated `renderGoal` to display progress as `completed_items/total_items`.
+  - Added `handleToggleGoalStatus` to toggle goal status between `active` and `completed`, with validation to prevent changes for `archived` goals.
+  - Renamed "マイルストーン" to "サブ目標" for consistency.
+- Updated `src/app/todo/list/page.tsx`:
+  - Updated `Goal` interface to remove `metric`, `smart`, and `fast`.
+  - Removed `updateGoalProgress` from `handleToggle`, as goal status is user-controlled.
+- Updated `src/app/todo/completed/page.tsx`:
+  - Updated `Goal` interface to remove `metric`.
+  - Removed `updateGoalProgress` from `handleRestoreTodo`, as progress is calculated dynamically.
+
+### Fixed
+- Resolved TypeScript errors in `src/app/goals/page.tsx`:
+  - Fixed syntax error in `handleToggleGoalStatus` by removing duplicated function body, ensuring correct handling of `currentStatus` and `goalId`.
+  - Fixed type mismatch in `handleToggleGoalStatus` by allowing `currentStatus: "active" | "completed" | "archived"` and handling `archived` case with an alert.
+- Resolved TypeScript errors in `src/app/todo/list/page.tsx` (from 1.8.0):
+  - Added missing `groupedTodos` and `sortedGroupedTodos` logic to group and sort tasks by date, priority, and creation date.
+  - Explicitly typed the `todo` parameter as `Todo` in the rendering `map` callback.
+- Resolved TypeScript error in `src/app/todo/completed/page.tsx` (from 1.8.0):
+  - Fixed type mismatch in `handleRestoreTodo` by explicitly typing the `sg` parameter as `Goal` in the `sub_goals?.some` callback.
+- Ensured UI consistency across light and dark modes for goal and task displays.
+
+### Notes
+- The simplified goal system allows both sub-goals and tasks under any goal, with progress calculated dynamically and status controlled by users.
+- Recommended adding an index on `todos.goal_id` for performance:
+  ```sql
+  CREATE INDEX idx_todos_goal_id ON todos(goal_id);
+  ```
+- Future improvements may include:
+  - Validation for sub-goal/task count limits.
+  - Explicit linking of diary entries to goals for the "Act" phase.
+  - Visual indicators for goal hierarchy depth.
+(#)

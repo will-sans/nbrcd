@@ -37,14 +37,11 @@ interface Goal {
   id: string;
   title: string;
   description: string;
-  metric: { target?: number; unit?: string; current?: number } | null;
-  start_date: string;
-  end_date: string;
-  smart: { specific: string; measurable: string; achievable: string; relevant: string; time_bound: string };
-  fast: { frequently_discussed: string; ambitious: string; specific: string; transparent: string };
   status: "active" | "completed" | "archived";
   parent_goal_id?: string;
   sub_goals?: Goal[];
+  start_date: string;
+  end_date: string;
   created_at: string;
 }
 
@@ -276,7 +273,7 @@ export default function TodoListPage() {
     }
 
     const completedDateUTC = new Date();
-    const todo = todos.find((t) => t.id === id);
+    //const todo = todos.find((t) => t.id === id);
 
     try {
       const { error } = await supabase
@@ -290,43 +287,6 @@ export default function TodoListPage() {
 
       if (error) {
         throw new Error(error.message || "タスクの更新に失敗しました");
-      }
-
-      if (todo?.goal_id) {
-        const updateGoalProgress = async (goalId: string) => {
-          const { data: goal } = await supabase
-            .from("goals")
-            .select("*")
-            .eq("id", goalId)
-            .eq("user_id", user.id)
-            .single();
-
-          if (goal?.metric) {
-            await supabase
-              .from("goals")
-              .update({
-                metric: {
-                  ...goal.metric,
-                  current: (goal.metric.current || 0) + 1,
-                },
-              })
-              .eq("id", goal.id)
-              .eq("user_id", user.id);
-          } else {
-            // Mark the goal as completed if it's a milestone
-            await supabase
-              .from("goals")
-              .update({ status: "completed" })
-              .eq("id", goal.id)
-              .eq("user_id", user.id);
-          }
-
-          if (goal?.parent_goal_id) {
-            await updateGoalProgress(goal.parent_goal_id);
-          }
-        };
-
-        await updateGoalProgress(todo.goal_id);
       }
 
       setTimeout(() => {
