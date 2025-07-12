@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/utils/supabase/client";
 import { FaSearch, FaSpinner, FaArrowLeft } from "react-icons/fa";
-import { philosophers } from "@/data/philosophers";
 import { PostgrestError } from "@supabase/supabase-js";
 
 interface Question {
@@ -61,6 +60,7 @@ export default function LearningSearch() {
   const [books, setBooks] = useState<string[]>([]);
   const [chapters, setChapters] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [philosophersList, setPhilosophersList] = useState<{ id: string; name: string }[]>([]);
 
   const isFetchingRef = useRef(false);
   const itemsPerPage = 10;
@@ -69,6 +69,30 @@ export default function LearningSearch() {
   const generateEmbedding = async (): Promise<number[]> => {
     return Array(1536).fill(0.1); // Dummy vector
   };
+
+  // Fetch philosophers from Supabase using view
+  const fetchPhilosophers = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("unique_philosophers")  // 新ビュー使用
+        .select("*");  // philosophy, authorを直接取得
+
+      if (error) throw error;
+
+      // ビューでuniqueなので、Map不要だが念のため
+      const uniquePhilosophers = Array.from(
+        new Map(data.map((item) => [item.philosophy, item])).values()
+      ).map((item) => ({
+        id: item.philosophy,
+        name: item.author,
+      }));
+
+      setPhilosophersList(uniquePhilosophers);
+    } catch (err) {
+      console.error("Failed to fetch philosophers:", err);
+      setError("哲学者の取得に失敗しました。");
+    }
+  }, [supabase]);
 
   // Fetch filter options based on author, book, and chapter
   const fetchFilterOptions = useCallback(async () => {
@@ -208,12 +232,13 @@ export default function LearningSearch() {
     [author, book, chapter, category, searchTerm, useVectorSearch, supabase, currentPage]
   );
 
-  // Combined useEffect to handle filter options, total count, and questions
+  // Combined useEffect to handle philosophers, filter options, total count, and questions
   useEffect(() => {
+    fetchPhilosophers();
     fetchFilterOptions();
     fetchTotalCount();
     fetchQuestions();
-  }, [fetchFilterOptions, fetchTotalCount, fetchQuestions]);
+  }, [fetchPhilosophers, fetchFilterOptions, fetchTotalCount, fetchQuestions]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,7 +317,7 @@ export default function LearningSearch() {
             className="p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm"
           >
             <option value="">著者を選択</option>
-            {philosophers.map((p) => (
+            {philosophersList.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>

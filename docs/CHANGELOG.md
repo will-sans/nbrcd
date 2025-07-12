@@ -979,3 +979,12 @@ This document tracks changes to the database schema for the NBRCD app.
   - Explicit linking of diary entries to goals for the "Act" phase.
   - Visual indicators for goal hierarchy depth.
 (#b90ab3a)
+
+## [1.10.0] - 2025-07-12
+
+### Changed
+- **Author fetching changed from static to dynamic**:
+  - Removed static philosophers.ts and migrated to dynamic fetching from Supabase questions table for philosophers list. This allows real-time updates from DB without code changes.
+- philosophersリストのフェッチをquestionsテーブル全行取得からビュー(unique_philosophers)ベースに変更。GROUP BYでユニークペア確保し、Supabase行制限(1000)回避。全著者(11件)取得可能に。メリット: データ一貫性向上、パフォーマンス改善; デメリット: DBビュー依存（SQL Editorで管理）。関連: Supabaseドキュメント/Reddit議論。
+- 影響: learning-search/page.tsx, learning-session/page.tsx のfetchPhilosophers関数。
+(#)

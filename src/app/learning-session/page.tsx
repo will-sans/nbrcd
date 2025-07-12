@@ -1,10 +1,8 @@
-
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { philosophers } from "@/data/philosophers";
 import { Question } from "@/types/question";
 import { ActionLog } from "@/types/actionLog";
 import { FaCheck, FaTimes, FaArrowLeft, FaLightbulb } from "react-icons/fa";
@@ -74,6 +72,7 @@ export default function LearningSession() {
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
   const [recommendedQuestions, setRecommendedQuestions] = useState<RecommendedQuestion[]>([]);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [philosophersList, setPhilosophersList] = useState<{ id: string; name: string }[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const supabase = getSupabaseClient();
@@ -174,6 +173,30 @@ export default function LearningSession() {
     };
   }, [checkUser]);
 
+  // Fetch philosophers from Supabase using view
+  const fetchPhilosophers = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("unique_philosophers")  // 新ビュー使用
+        .select("*");  // philosophy, authorを直接取得
+
+      if (error) throw error;
+
+      // ビューでuniqueなので、Map不要だが念のため
+      const uniquePhilosophers = Array.from(
+        new Map(data.map((item) => [item.philosophy, item])).values()
+      ).map((item) => ({
+        id: item.philosophy,
+        name: item.author,
+      }));
+
+      setPhilosophersList(uniquePhilosophers);
+    } catch (err) {
+      console.error("Failed to fetch philosophers:", err);
+      setError("哲学者の取得に失敗しました。");
+    }
+  }, [supabase]);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       console.log("Auth state changed in LearningSession:", event, session);
@@ -188,11 +211,12 @@ export default function LearningSession() {
     });
 
     checkUser();
+    fetchPhilosophers();
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [router, supabase.auth, checkUser]);
+  }, [router, supabase.auth, checkUser, fetchPhilosophers]);
 
   const savePoints = useCallback(async (action: string, points: number) => {
     const allowedActions = ["login", "action_select", "task_complete"];
@@ -329,7 +353,7 @@ export default function LearningSession() {
       );
     } else if (shouldRemoveQuestions) {
       console.log('No action plan matched, removing questions');
-      const sentences = updatedReply.split("。").filter((s: string) => s.trim() !== "");
+      const sentences = updatedReply.split("。").filter((s) => s.trim() !== "");
       if (sentences.length > 0 && sentences[sentences.length - 1].trim().endsWith("？")) {
         sentences.pop();
       }
@@ -793,7 +817,7 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
       return;
     }
 
-    const selectedPhilosopher = philosophers.find((p) => p.id === selectedPhilosopherId);
+    const selectedPhilosopher = philosophersList.find((p) => p.id === selectedPhilosopherId);
     if (!selectedPhilosopher) {
       setError("哲学者が見つかりません");
       return;
@@ -1063,7 +1087,7 @@ WILLさんのメタデータ：WILLさんは、経営者の実践的フィード
               className="block w-full p-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 text-sm disabled:bg-gray-200 dark:disabled:bg-gray-700"
             >
               <option value="">哲学者を選択してください</option>
-              {philosophers.map((philosopher) => (
+              {philosophersList.map((philosopher) => (
                 <option key={philosopher.id} value={philosopher.id}>
                   {philosopher.name}
                 </option>
